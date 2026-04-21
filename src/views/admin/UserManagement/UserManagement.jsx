@@ -533,7 +533,7 @@ const TABS = [
 ];
 
 export default function UserManagement() {
-  const { navigateTo } = useApp();
+  const { navigateTo, goBack } = useApp();
   const [tabActiva, setTabActiva] = useState('residentes');
 
   return (
@@ -542,7 +542,7 @@ export default function UserManagement() {
       {/* Cabecera */}
       <div style={{ background: 'white', borderBottom: '1px solid #e5e7eb', padding: '16px 24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-          <button onClick={() => navigateTo('center')} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 13, color: '#6b7280', fontFamily: 'inherit', padding: 0 }}>
+          <button onClick={goBack} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 13, color: '#6b7280', fontFamily: 'inherit', padding: 0 }}>
             ← Volver al dashboard
           </button>
           <div style={{ width: 1, height: 20, background: '#e5e7eb' }} />

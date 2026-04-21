@@ -18,6 +18,7 @@ export function AppProvider({ children }) {
   const [userRole, setUserRole] = useState(null);
   const [authLoading, setAuthLoading] = useState(true);
   const [currentView, setCurrentView] = useState('login');
+  const [navigationHistory, setNavigationHistory] = useState([]);
 
   const [sessionState, setSessionState] = useState({
     activa: false,
@@ -93,6 +94,7 @@ export function AppProvider({ children }) {
     setProfile(null);
     setUserRole(null);
     setCurrentView('login');
+    setNavigationHistory([]);
     localStorage.removeItem('kinactRole');
   };
 
@@ -103,7 +105,28 @@ export function AppProvider({ children }) {
       localStorage.setItem('kinactRole', options.role);
     }
     if (options.residentId) setSelectedResidentId(options.residentId);
+
+    // Guardar vista actual en el historial (excepto login y vistas de inicio de sesión)
+    setNavigationHistory(prev =>
+      currentView !== 'login' && view !== 'login' ? [...prev, currentView] : []
+    );
     setCurrentView(view);
+  };
+
+  // ── Volver atrás ──────────────────────────────────────────────────────────
+  const goBack = () => {
+    setNavigationHistory(prev => {
+      if (prev.length === 0) {
+        // Sin historial: ir a la pantalla de inicio del rol
+        const home = VISTA_POR_ROL[userRole] || 'login';
+        setCurrentView(home);
+        return [];
+      }
+      const newHistory = [...prev];
+      const previousView = newHistory.pop();
+      setCurrentView(previousView);
+      return newHistory;
+    });
   };
 
   return (
@@ -112,7 +135,7 @@ export function AppProvider({ children }) {
       userRole, setUserRole,
       authLoading,
       currentView, setCurrentView,
-      navigateTo, login, logout,
+      navigateTo, goBack, login, logout,
       sessionState, setSessionState,
       evaluaciones, setEvaluaciones,
       selectedResidentId, setSelectedResidentId,

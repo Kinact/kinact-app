@@ -65,7 +65,7 @@ const ESCALAS_DEF = [
 // ─── ResidentDashboard ────────────────────────────────────────────────────────
 
 export default function ResidentDashboard() {
-  const { navigateTo, selectedResidentId } = useApp();
+  const { navigateTo, goBack, selectedResidentId } = useApp();
   const [escalaAbierta, setEscalaAbierta] = useState(null);
 
   const residenteId = selectedResidentId || 'r1';
@@ -345,7 +345,7 @@ export default function ResidentDashboard() {
         {/* ── Pie ── */}
         <div style={{ display: 'flex', justifyContent: 'flex-start' }}>
           <button
-            onClick={() => navigateTo('center')}
+            onClick={goBack}
             style={btnBase()}
           >
             ← Volver al dashboard

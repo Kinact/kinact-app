@@ -37,7 +37,7 @@ function LoadingScreen() {
 
 // ── Router principal ──────────────────────────────────────────────────────────
 function AppRouter() {
-  const { currentView, navigateTo, setSessionState, authLoading } = useApp();
+  const { currentView, navigateTo, goBack, setSessionState, authLoading } = useApp();
 
   if (authLoading) return <LoadingScreen />;
 
@@ -67,7 +67,7 @@ function AppRouter() {
                                 onVerResidentes={() => navigateTo('residents')}
                               />;
     case 'residents':         return <ResidentManager
-                                onBack={() => navigateTo('session-selector')}
+                                onBack={goBack}
                                 onVerDashboard={id => navigateTo('resident', { residentId: id })}
                               />;
     case 'session-active':    return <SessionActive />;

@@ -125,7 +125,7 @@ function EscalaCard({
 // ─── ClinicalScales ───────────────────────────────────────────────────────────
 
 export default function ClinicalScales() {
-  const { navigateTo } = useApp();
+  const { navigateTo, goBack } = useApp();
 
   const [residActual, setResidActual] = useState(0);
   const [valores, setValores] = useState(
@@ -170,7 +170,7 @@ export default function ClinicalScales() {
 
   const handleGuardarCerrar = () => {
     guardarEnStorage(residActual);
-    navigateTo('center');
+    goBack();
   };
 
   const esUltimo = residActual === MOCK_RESIDENTS.length - 1;
@@ -330,7 +330,7 @@ export default function ClinicalScales() {
         {/* ── Pie ── */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <button
-            onClick={() => navigateTo('center')}
+            onClick={goBack}
             style={btnBase()}
           >
             Cancelar
