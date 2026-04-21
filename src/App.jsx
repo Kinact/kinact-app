@@ -9,6 +9,7 @@ import ResidentDashboard from './views/dashboards/ResidentDashboard/ResidentDash
 import CenterDashboard from './views/dashboards/CenterDashboard/CenterDashboard';
 import FamilyPortal from './views/family/FamilyPortal/FamilyPortal';
 import ClinicalScales from './views/clinical/ClinicalScales/ClinicalScales';
+import UserManagement from './views/admin/UserManagement/UserManagement';
 import './index.css';
 
 function AppRouter() {
@@ -50,6 +51,7 @@ function AppRouter() {
     case 'center':            return <CenterDashboard />;
     case 'family':            return <FamilyPortal />;
     case 'clinical-scales':   return <ClinicalScales />;
+    case 'user-management':   return <UserManagement />;
     default:                  return <Onboarding />;
   }
 }

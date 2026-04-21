@@ -206,6 +206,8 @@ export default function CenterDashboard() {
             <div style={{ fontSize: 12, color: '#9ca3af' }}>{MES_ACTUAL}</div>
           </div>
           <div style={{ display: 'flex', gap: 8 }}>
+            <button onClick={() => navigateTo('residents')} style={btnBase()}>Gestión de residentes</button>
+            <button onClick={() => navigateTo('user-management')} style={btnBase()}>Gestión de usuarios</button>
             <button style={btnBase()}>Exportar informe mensual</button>
             <button onClick={() => navigateTo('clinical-scales')} style={btnBase()}>Escalas clínicas</button>
             <button onClick={() => navigateTo('session-selector')} style={btnBase('#dbeafe', '#1d4ed8', '#93c5fd')}>Nueva sesión</button>
