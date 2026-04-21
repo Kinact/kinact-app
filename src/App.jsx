@@ -1,4 +1,5 @@
 import { AppProvider, useApp } from './context/AppContext';
+import Login from './views/auth/Login/Login';
 import Onboarding from './views/auth/Onboarding/Onboarding';
 import SessionSelector from './views/facilitator/SessionSelector/SessionSelector';
 import ResidentManager from './views/facilitator/ResidentManager/ResidentManager';
@@ -12,11 +13,35 @@ import ClinicalScales from './views/clinical/ClinicalScales/ClinicalScales';
 import UserManagement from './views/admin/UserManagement/UserManagement';
 import './index.css';
 
+// ── Pantalla de carga mientras Supabase verifica la sesión ────────────────────
+function LoadingScreen() {
+  return (
+    <div style={{
+      minHeight: '100vh', background: '#f0f4f8',
+      display: 'flex', flexDirection: 'column',
+      alignItems: 'center', justifyContent: 'center',
+      fontFamily: "'Nunito', sans-serif", gap: 16,
+    }}>
+      <div style={{
+        width: 52, height: 52, borderRadius: 14,
+        background: '#1d4ed8',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        boxShadow: '0 4px 14px #1d4ed840',
+      }}>
+        <span style={{ fontSize: 22, color: 'white', fontWeight: 900 }}>K</span>
+      </div>
+      <div style={{ fontSize: 13, color: '#9ca3af', fontWeight: 600 }}>Cargando…</div>
+    </div>
+  );
+}
+
+// ── Router principal ──────────────────────────────────────────────────────────
 function AppRouter() {
-  const { currentView, navigateTo, setSessionState } = useApp();
+  const { currentView, navigateTo, setSessionState, authLoading } = useApp();
+
+  if (authLoading) return <LoadingScreen />;
 
   const handleIniciarSesion = (jugadores, tableros) => {
-    // Construye el estado inicial de sesión con los jugadores seleccionados
     setSessionState(prev => ({
       ...prev,
       activa: true,
@@ -35,6 +60,7 @@ function AppRouter() {
   };
 
   switch (currentView) {
+    case 'login':             return <Login />;
     case 'onboarding':        return <Onboarding />;
     case 'session-selector':  return <SessionSelector
                                 onIniciarSesion={handleIniciarSesion}
@@ -52,7 +78,7 @@ function AppRouter() {
     case 'family':            return <FamilyPortal />;
     case 'clinical-scales':   return <ClinicalScales />;
     case 'user-management':   return <UserManagement />;
-    default:                  return <Onboarding />;
+    default:                  return <Login />;
   }
 }
 
