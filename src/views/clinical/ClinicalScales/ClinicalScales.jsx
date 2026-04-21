@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useApp } from '../../../context/AppContext';
 import { MOCK_RESIDENTS, MOCK_ESCALAS } from '../../../data/mockData';
+import { supabase } from '../../../lib/supabase';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -149,27 +150,50 @@ export default function ClinicalScales() {
   const ultimoBarthel = histEscalas.barthel?.slice(-1)[0]?.valor;
   const ultimoTUG    = histEscalas.tug?.slice(-1)[0]?.valor;
 
-  const guardarEnStorage = (idx) => {
-    const entrada = {
-      residenteId: MOCK_RESIDENTS[idx].id,
-      fecha: new Date().toISOString().split('T')[0],
-      valores: valores[idx]
-    };
+  const guardarEscala = async (idx) => {
+    const r   = MOCK_RESIDENTS[idx];
+    const v   = valores[idx];
+    const hoy = new Date().toISOString().split('T')[0];
+
+    // localStorage como fallback
     try {
+      const entrada = { residenteId: r.id, fecha: hoy, valores: v };
       const prev = JSON.parse(localStorage.getItem('kinact_escalas') || '[]');
-      // Reemplaza si ya existe entrada del mismo residente y fecha
-      const filtrado = prev.filter(e => !(e.residenteId === entrada.residenteId && e.fecha === entrada.fecha));
+      const filtrado = prev.filter(e => !(e.residenteId === r.id && e.fecha === hoy));
       localStorage.setItem('kinact_escalas', JSON.stringify([...filtrado, entrada]));
-    } catch { /* silencioso en caso de error de storage */ }
+    } catch { /* silencioso */ }
+
+    // Supabase — solo si hay al menos un valor registrado
+    const tieneValor = v.mec !== '' || v.gds !== '' || v.barthel !== '' || v.tug !== '';
+    if (!tieneValor) return;
+
+    // Upsert: reemplaza si ya existe entrada del mismo residente y fecha
+    const { error } = await supabase
+      .from('kinact_escalas')
+      .upsert({
+        residente_id:  r.id,
+        fecha:         hoy,
+        mec:           v.mec     !== '' ? Number(v.mec)     : null,
+        gds:           v.gds     !== '' ? Number(v.gds)     : null,
+        barthel:       v.barthel !== '' ? Number(v.barthel) : null,
+        tug:           v.tug     !== '' ? Number(v.tug)     : null,
+        mec_cond:      v.condEspeciales.mec,
+        gds_cond:      v.condEspeciales.gds,
+        barthel_cond:  v.condEspeciales.barthel,
+        tug_cond:      v.condEspeciales.tug,
+        observaciones: v.observaciones || ''
+      }, { onConflict: 'residente_id,fecha' });
+
+    if (error) console.warn('Error guardando escala:', error.message);
   };
 
-  const handleSiguiente = () => {
-    guardarEnStorage(residActual);
+  const handleSiguiente = async () => {
+    await guardarEscala(residActual);
     setResidActual(i => i + 1);
   };
 
-  const handleGuardarCerrar = () => {
-    guardarEnStorage(residActual);
+  const handleGuardarCerrar = async () => {
+    await guardarEscala(residActual);
     goBack();
   };
 

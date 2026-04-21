@@ -177,12 +177,16 @@ export default function SessionSelector({ onIniciarSesion, onVerResidentes }) {
                         ))}
                       </select>
 
-                      {/* Badge tablero */}
+                      {/* Badge tablero — usa tableroHabitual del residente seleccionado */}
                       <span style={{
                         fontSize: 10, padding: '2px 6px', borderRadius: 4, flexShrink: 0,
                         background: 'rgba(255,255,255,0.15)', color: '#bfdbfe'
                       }}>
-                        {capitalize(TABLEROS[i])}
+                        {capitalize(
+                          jugadores[i]
+                            ? (MOCK_RESIDENTS.find(r => r.id === jugadores[i])?.tableroHabitual || TABLEROS[i])
+                            : TABLEROS[i]
+                        )}
                       </span>
                     </div>
                   ))}
@@ -192,7 +196,7 @@ export default function SessionSelector({ onIniciarSesion, onVerResidentes }) {
                   disabled={empezarDisabled}
                   onClick={() => onIniciarSesion(
                     jugadores.map(id => MOCK_RESIDENTS.find(r => r.id === id)),
-                    TABLEROS
+                    jugadores.map(id => MOCK_RESIDENTS.find(r => r.id === id)?.tableroHabitual || 'casa')
                   )}
                   style={{
                     marginTop: 12, width: '100%', padding: '9px 0',

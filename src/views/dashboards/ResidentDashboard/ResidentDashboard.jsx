@@ -324,15 +324,18 @@ function exportarPDF(residente, historial, escalas, metricas) {
 export default function ResidentDashboard() {
   const { navigateTo, goBack, selectedResidentId } = useApp();
   const [escalaAbierta, setEscalaAbierta]   = useState(null);
-  const [sesionesReales, setSesionesReales] = useState(null); // null = cargando
+  const [sesionesReales, setSesionesReales] = useState(null);
+  const [escalasReales, setEscalasReales]   = useState(null);
 
   const residenteId = selectedResidentId || 'r1';
   const residente   = MOCK_RESIDENTS.find(r => r.id === residenteId);
-  const escalas     = MOCK_ESCALAS[residenteId] || {};
 
-  // ── Cargar sesiones reales de Supabase ─────────────────────────────────────
+  // ── Cargar sesiones y escalas reales de Supabase ───────────────────────────
   useEffect(() => {
     setSesionesReales(null);
+    setEscalasReales(null);
+
+    // Sesiones
     supabase
       .from('kinact_sesiones')
       .select('*')
@@ -341,7 +344,7 @@ export default function ResidentDashboard() {
       .order('sesion_num', { ascending: true })
       .then(({ data }) => {
         if (data && data.length > 0) {
-          const mapeadas = data.map((s, i) => ({
+          setSesionesReales(data.map((s, i) => ({
             sesion:          s.sesion_num || i + 1,
             fecha:           s.fecha,
             gapsCompletados: s.gaps_completados,
@@ -352,16 +355,37 @@ export default function ResidentDashboard() {
             autonomia:       s.autonomia,
             agitacion:       s.agitacion,
             fatiga:          s.fatiga
-          }));
-          setSesionesReales(mapeadas);
+          })));
         } else {
           setSesionesReales(MOCK_SESSION_HISTORY[residenteId] || []);
         }
       });
+
+    // Escalas clínicas
+    supabase
+      .from('kinact_escalas')
+      .select('*')
+      .eq('residente_id', residenteId)
+      .order('fecha', { ascending: true })
+      .then(({ data }) => {
+        if (data && data.length > 0) {
+          // Transformar al formato { mec: [{fecha, valor, condEspeciales}], ... }
+          const escalas = { mec: [], gds: [], barthel: [], tug: [] };
+          data.forEach(row => {
+            if (row.mec     != null) escalas.mec.push({     fecha: row.fecha, valor: row.mec,     condEspeciales: row.mec_cond });
+            if (row.gds     != null) escalas.gds.push({     fecha: row.fecha, valor: row.gds,     condEspeciales: row.gds_cond });
+            if (row.barthel != null) escalas.barthel.push({ fecha: row.fecha, valor: row.barthel, condEspeciales: row.barthel_cond });
+            if (row.tug     != null) escalas.tug.push({     fecha: row.fecha, valor: row.tug });
+          });
+          setEscalasReales(escalas);
+        } else {
+          setEscalasReales(MOCK_ESCALAS[residenteId] || {});
+        }
+      });
   }, [residenteId]);
 
-  // Mientras carga, usar mock como fallback
   const historial = sesionesReales ?? MOCK_SESSION_HISTORY[residenteId] ?? [];
+  const escalas   = escalasReales  ?? MOCK_ESCALAS[residenteId] ?? {};
 
   if (!residente) return null;
 

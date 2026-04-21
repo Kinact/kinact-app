@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useApp } from '../../../context/AppContext';
 import { MOCK_RESIDENTS, MOCK_SESSION_HISTORY } from '../../../data/mockData';
 import { TABLERO_COLORS } from '../../../constants/tableros';
@@ -85,9 +85,12 @@ export default function Summary() {
   const [guardando, setGuardando] = useState(true);
   const [guardados, setGuardados] = useState(0);
   const [errorGuardado, setErrorGuardado] = useState(false);
+  const yaGuardado = useRef(false); // evita doble guardado en React StrictMode
 
   // ── Guardar sesión en Supabase al montar ───────────────────────────────────
   useEffect(() => {
+    if (yaGuardado.current) return;
+    yaGuardado.current = true;
     const hoy = new Date().toISOString().split('T')[0];
 
     const guardarTodo = async () => {
