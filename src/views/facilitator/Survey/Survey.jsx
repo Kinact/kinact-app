@@ -1,6 +1,5 @@
 import { useState } from 'react';
 import { useApp } from '../../../context/AppContext';
-import { MOCK_RESIDENTS } from '../../../data/mockData';
 import { TABLERO_COLORS } from '../../../constants/tableros';
 
 const ESTADO_OPCIONES = [
@@ -22,11 +21,15 @@ const AUTONOMIA_OPCIONES = [
 ];
 
 export default function Survey() {
-  const { navigateTo, setEvaluaciones } = useApp();
+  const { navigateTo, setEvaluaciones, sessionState } = useApp();
+
+  // Usar los jugadores reales de la sesión activa
+  const jugadores = sessionState?.jugadores || [];
+  const total     = jugadores.length || 1;
 
   const [jugadorActual, setJugadorActual] = useState(0);
   const [evaluaciones, setEvaluacionesLocal] = useState(
-    Array(4).fill(null).map(() => ({
+    Array(total).fill(null).map(() => ({
       estadoEmocional: null,
       engagement:      null,
       autonomia:       null,
@@ -36,9 +39,9 @@ export default function Survey() {
     }))
   );
 
-  const jugador    = MOCK_RESIDENTS[jugadorActual];
-  const evalActual = evaluaciones[jugadorActual];
-  const tableroKey = jugador.tableroHabitual;
+  const jugador    = jugadores[jugadorActual] || {};
+  const evalActual = evaluaciones[jugadorActual] || {};
+  const tableroKey = jugador.tableroAsignado || jugador.tableroHabitual || 'casa';
   const colores    = TABLERO_COLORS[tableroKey] || TABLERO_COLORS.casa;
 
   const completo =
@@ -55,10 +58,9 @@ export default function Survey() {
   };
 
   const siguiente = () => {
-    if (jugadorActual < 3) {
+    if (jugadorActual < total - 1) {
       setJugadorActual(j => j + 1);
     } else {
-      // Guardar en contexto global y navegar a resumen
       setEvaluaciones(evaluaciones);
       navigateTo('summary');
     }
@@ -93,14 +95,14 @@ export default function Survey() {
 
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6 }}>
             <div style={{ display: 'flex', gap: 4 }}>
-              {Array(4).fill(null).map((_, i) => (
+              {Array(total).fill(null).map((_, i) => (
                 <div key={i} style={{
                   width: 28, height: 6, borderRadius: 3,
                   background: i <= jugadorActual ? '#2563eb' : '#e5e7eb'
                 }} />
               ))}
             </div>
-            <span style={{ fontSize: 12, color: '#6b7280' }}>{jugadorActual + 1} de 4</span>
+            <span style={{ fontSize: 12, color: '#6b7280' }}>{jugadorActual + 1} de {total}</span>
           </div>
         </div>
 
@@ -285,7 +287,7 @@ export default function Survey() {
               transition: 'all 0.15s'
             }}
           >
-            {jugadorActual < 3 ? 'Siguiente jugador →' : 'Ver resumen →'}
+            {jugadorActual < total - 1 ? 'Siguiente jugador →' : 'Ver resumen →'}
           </button>
         </div>
 

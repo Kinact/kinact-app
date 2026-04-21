@@ -1,7 +1,9 @@
+import { useEffect, useState } from 'react';
 import { useApp } from '../../../context/AppContext';
 import { MOCK_RESIDENTS, MOCK_SESSION_HISTORY } from '../../../data/mockData';
 import { TABLERO_COLORS } from '../../../constants/tableros';
 import { capitalize, fechaHoyLarga } from '../../../utils/formatters';
+import { supabase } from '../../../lib/supabase';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -80,6 +82,59 @@ export default function Summary() {
   const { sessionState, evaluaciones, navigateTo } = useApp();
   const jugadores = sessionState?.jugadores || [];
 
+  const [guardando, setGuardando] = useState(true);
+  const [guardados, setGuardados] = useState(0);
+  const [errorGuardado, setErrorGuardado] = useState(false);
+
+  // ── Guardar sesión en Supabase al montar ───────────────────────────────────
+  useEffect(() => {
+    const hoy = new Date().toISOString().split('T')[0];
+
+    const guardarTodo = async () => {
+      let ok = 0;
+      for (let i = 0; i < jugadores.length; i++) {
+        const jug  = jugadores[i];
+        const ev   = evaluaciones?.[i] || {};
+
+        // Contar sesiones anteriores para calcular nº de sesión
+        const { count: prevCount } = await supabase
+          .from('kinact_sesiones')
+          .select('*', { count: 'exact', head: true })
+          .eq('residente_id', jug.id);
+
+        const sesionNum       = (prevCount || 0) + 1;
+        const gapsCompletados = jug.tablero?.filter(g => g.ocupado).length || 0;
+        const intercambios    = jug.intercambios?.length || 0;
+        const mediaciones     = jug.acciones?.filter(a => !a.autonomo).length || 0;
+
+        const { error } = await supabase.from('kinact_sesiones').insert({
+          residente_id:     jug.id,
+          fecha:            hoy,
+          sesion_num:       sesionNum,
+          tablero:          jug.tableroAsignado || jug.tableroHabitual,
+          gaps_completados: gapsCompletados,
+          intercambios,
+          mediaciones,
+          estado:           ev.estadoEmocional || 'neutro',
+          engagement:       ev.engagement      || 'medio',
+          autonomia:        ev.autonomia       || 'parcial',
+          agitacion:        ev.agitacion       ?? false,
+          fatiga:           ev.fatiga          ?? false,
+          observaciones:    ev.observaciones   || ''
+        });
+
+        if (!error) ok++;
+        else console.warn('Error guardando sesión:', error.message);
+      }
+      setGuardados(ok);
+      setErrorGuardado(ok < jugadores.length);
+      setGuardando(false);
+    };
+
+    if (jugadores.length > 0) guardarTodo();
+    else setGuardando(false);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
   // Métricas globales
   const turnosTotales       = sessionState?.turnoNumero || 0;
   const totalIntercambios   = jugadores.reduce((sum, j) => sum + (j.intercambios?.length || 0), 0);
@@ -128,9 +183,16 @@ export default function Summary() {
           </div>
           <span style={{
             fontSize: 11, padding: '4px 10px', borderRadius: 20,
-            background: '#dcfce7', color: '#15803d', fontWeight: 500
+            background: guardando ? '#f3f4f6' : errorGuardado ? '#fee2e2' : '#dcfce7',
+            color:      guardando ? '#6b7280'  : errorGuardado ? '#b91c1c' : '#15803d',
+            fontWeight: 500
           }}>
-            Guardado en 4 perfiles
+            {guardando
+              ? 'Guardando…'
+              : errorGuardado
+                ? `${guardados}/${jugadores.length} guardados`
+                : `✓ Guardado en ${guardados} perfil${guardados !== 1 ? 'es' : ''}`
+            }
           </span>
         </div>
 

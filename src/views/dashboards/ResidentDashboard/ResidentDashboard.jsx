@@ -1,9 +1,10 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { jsPDF } from 'jspdf';
 import { useApp } from '../../../context/AppContext';
 import { MOCK_RESIDENTS, MOCK_SESSION_HISTORY, MOCK_ESCALAS } from '../../../data/mockData';
 import { TABLERO_COLORS } from '../../../constants/tableros';
 import { fmtFecha, fmtFechaCorta } from '../../../utils/formatters';
+import { supabase } from '../../../lib/supabase';
 
 // ─── Colores ──────────────────────────────────────────────────────────────────
 
@@ -322,12 +323,45 @@ function exportarPDF(residente, historial, escalas, metricas) {
 
 export default function ResidentDashboard() {
   const { navigateTo, goBack, selectedResidentId } = useApp();
-  const [escalaAbierta, setEscalaAbierta] = useState(null);
+  const [escalaAbierta, setEscalaAbierta]   = useState(null);
+  const [sesionesReales, setSesionesReales] = useState(null); // null = cargando
 
   const residenteId = selectedResidentId || 'r1';
   const residente   = MOCK_RESIDENTS.find(r => r.id === residenteId);
-  const historial   = MOCK_SESSION_HISTORY[residenteId] || [];
   const escalas     = MOCK_ESCALAS[residenteId] || {};
+
+  // ── Cargar sesiones reales de Supabase ─────────────────────────────────────
+  useEffect(() => {
+    setSesionesReales(null);
+    supabase
+      .from('kinact_sesiones')
+      .select('*')
+      .eq('residente_id', residenteId)
+      .order('fecha', { ascending: true })
+      .order('sesion_num', { ascending: true })
+      .then(({ data }) => {
+        if (data && data.length > 0) {
+          const mapeadas = data.map((s, i) => ({
+            sesion:          s.sesion_num || i + 1,
+            fecha:           s.fecha,
+            gapsCompletados: s.gaps_completados,
+            intercambios:    s.intercambios,
+            mediaciones:     s.mediaciones,
+            estado:          s.estado,
+            engagement:      s.engagement,
+            autonomia:       s.autonomia,
+            agitacion:       s.agitacion,
+            fatiga:          s.fatiga
+          }));
+          setSesionesReales(mapeadas);
+        } else {
+          setSesionesReales(MOCK_SESSION_HISTORY[residenteId] || []);
+        }
+      });
+  }, [residenteId]);
+
+  // Mientras carga, usar mock como fallback
+  const historial = sesionesReales ?? MOCK_SESSION_HISTORY[residenteId] ?? [];
 
   if (!residente) return null;
 

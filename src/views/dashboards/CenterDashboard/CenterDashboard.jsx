@@ -1,6 +1,7 @@
-import { useMemo } from 'react';
+import { useMemo, useEffect, useState } from 'react';
 import { useApp } from '../../../context/AppContext';
 import { MOCK_CENTER, MOCK_RESIDENTS, MOCK_SESSION_HISTORY, MOCK_ESCALAS } from '../../../data/mockData';
+import { supabase } from '../../../lib/supabase';
 
 // ─── Constantes ───────────────────────────────────────────────────────────────
 
@@ -56,6 +57,26 @@ const GRUPO_STYLES = {
 
 export default function CenterDashboard() {
   const { navigateTo } = useApp();
+
+  // ── Sesiones reales desde Supabase ─────────────────────────────────────────
+  const [totalSesionesDB, setTotalSesionesDB] = useState(null);
+  const [ultimasSesionesDB, setUltimasSesionesDB] = useState([]);
+
+  useEffect(() => {
+    // Contar sesiones reales guardadas
+    supabase
+      .from('kinact_sesiones')
+      .select('*', { count: 'exact', head: true })
+      .then(({ count }) => { if (count !== null) setTotalSesionesDB(count); });
+
+    // Últimas 5 sesiones para el panel de actividad reciente
+    supabase
+      .from('kinact_sesiones')
+      .select('residente_id, fecha, gaps_completados, engagement')
+      .order('created_at', { ascending: false })
+      .limit(5)
+      .then(({ data }) => { if (data) setUltimasSesionesDB(data); });
+  }, []);
 
   // ── Stats globales ──
   const stats = useMemo(() => {
@@ -149,10 +170,12 @@ export default function CenterDashboard() {
       color: stats.asistenciaMedia >= 70 ? '#16a34a' : '#d97706'
     },
     {
-      valor: `${stats.sesionesTotal}/14`,
-      label: 'Sesiones completadas',
-      sub: 'Objetivo mensual',
-      color: stats.sesionesTotal >= 10 ? '#16a34a' : '#d97706'
+      valor: totalSesionesDB !== null
+        ? `${totalSesionesDB}`
+        : `${stats.sesionesTotal}`,
+      label: 'Sesiones registradas',
+      sub: totalSesionesDB !== null ? 'Guardadas en Supabase' : 'Datos locales',
+      color: '#16a34a'
     },
     {
       valor: stats.intercambiosTotal,
@@ -344,6 +367,38 @@ export default function CenterDashboard() {
               </div>
             </div>
           </div>
+
+          {/* Actividad reciente (Supabase) */}
+          {ultimasSesionesDB.length > 0 && (
+            <div style={{ ...cardStyle, padding: 12 }}>
+              <div style={{ fontSize: 12, fontWeight: 600, color: '#374151', marginBottom: 8 }}>
+                Últimas sesiones registradas
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+                {ultimasSesionesDB.map((s, i) => {
+                  const res = MOCK_RESIDENTS.find(r => r.id === s.residente_id);
+                  const engColor = s.engagement === 'alto' ? '#15803d' : s.engagement === 'medio' ? '#d97706' : '#dc2626';
+                  return (
+                    <div key={i} style={{
+                      display: 'flex', justifyContent: 'space-between',
+                      alignItems: 'center', fontSize: 11,
+                      padding: '4px 0',
+                      borderBottom: i < ultimasSesionesDB.length - 1 ? '0.5px solid #f3f4f6' : 'none'
+                    }}>
+                      <span style={{ color: '#374151', fontWeight: 500 }}>
+                        {res?.nombre || s.residente_id}
+                      </span>
+                      <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                        <span style={{ color: '#9ca3af' }}>{s.gaps_completados}/9 gaps</span>
+                        <span style={{ color: engColor, fontWeight: 500 }}>{s.engagement}</span>
+                        <span style={{ color: '#9ca3af' }}>{s.fecha}</span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
 
           {/* Mapa de dinamismo */}
           <div style={{
