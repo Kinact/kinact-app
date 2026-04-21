@@ -1,7 +1,10 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { jsPDF } from 'jspdf';
 import { useApp } from '../../../context/AppContext';
-import { MOCK_RESIDENTS } from '../../../data/mockData';
+import { supabase } from '../../../lib/supabase';
 import { TABLERO_COLORS_DARK } from '../../../constants/tableros';
+
+const CENTRO_ID = '00000000-0000-0000-0000-000000000001';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -12,50 +15,28 @@ function generarPassword() {
 
 function btnBase(bg, color, border) {
   return {
-    padding: '7px 14px',
-    fontSize: 12,
-    fontWeight: 600,
-    borderRadius: 6,
+    padding: '7px 14px', fontSize: 12, fontWeight: 600, borderRadius: 6,
     border: `1px solid ${border || '#e5e7eb'}`,
-    background: bg || 'white',
-    color: color || '#374151',
-    cursor: 'pointer',
-    fontFamily: 'inherit',
-    lineHeight: 1.4,
-    whiteSpace: 'nowrap',
+    background: bg || 'white', color: color || '#374151',
+    cursor: 'pointer', fontFamily: 'inherit', lineHeight: 1.4, whiteSpace: 'nowrap',
   };
 }
 
 function inputStyle(extra = {}) {
   return {
-    width: '100%',
-    padding: '8px 10px',
-    borderRadius: 6,
-    border: '1px solid #d1d5db',
-    fontSize: 13,
-    fontFamily: 'inherit',
-    color: '#111827',
-    background: 'white',
-    boxSizing: 'border-box',
-    ...extra,
+    width: '100%', padding: '8px 10px', borderRadius: 6,
+    border: '1px solid #d1d5db', fontSize: 13, fontFamily: 'inherit',
+    color: '#111827', background: 'white', boxSizing: 'border-box', ...extra,
   };
 }
 
-function labelStyle() {
-  return { fontSize: 12, fontWeight: 600, color: '#374151', display: 'block', marginBottom: 4 };
-}
-
-function fieldWrap(children, style = {}) {
-  return <div style={{ marginBottom: 12, ...style }}>{children}</div>;
-}
+const labelStyle = () => ({ fontSize: 12, fontWeight: 600, color: '#374151', display: 'block', marginBottom: 4 });
+const fieldWrap  = (children, style = {}) => <div style={{ marginBottom: 12, ...style }}>{children}</div>;
 
 function BadgeTablero({ tablero }) {
   const c = TABLERO_COLORS_DARK[tablero] || { bg: '#e5e7eb', text: '#374151' };
   return (
-    <span style={{
-      fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 20,
-      background: c.bg, color: c.text, textTransform: 'capitalize', letterSpacing: '.04em',
-    }}>
+    <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 20, background: c.bg, color: c.text, textTransform: 'capitalize' }}>
       {tablero}
     </span>
   );
@@ -63,11 +44,7 @@ function BadgeTablero({ tablero }) {
 
 function BadgeActivo({ activo = true }) {
   return (
-    <span style={{
-      fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 20,
-      background: activo ? '#dcfce7' : '#f3f4f6',
-      color: activo ? '#15803d' : '#9ca3af',
-    }}>
+    <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 20, background: activo ? '#dcfce7' : '#f3f4f6', color: activo ? '#15803d' : '#9ca3af' }}>
       {activo ? 'Activo' : 'Inactivo'}
     </span>
   );
@@ -76,80 +53,219 @@ function BadgeActivo({ activo = true }) {
 function CredencialesBox({ email, password }) {
   const [copiado, setCopiado] = useState(false);
   const texto = `Email: ${email}\nContraseña: ${password}`;
-
-  const copiar = () => {
-    navigator.clipboard?.writeText(texto);
-    setCopiado(true);
-    setTimeout(() => setCopiado(false), 2000);
-  };
-
+  const copiar = () => { navigator.clipboard?.writeText(texto); setCopiado(true); setTimeout(() => setCopiado(false), 2000); };
   return (
-    <div style={{
-      background: '#f0fdf4', border: '1px solid #86efac', borderRadius: 6,
-      padding: 12, marginTop: 10,
-    }}>
-      <div style={{ fontSize: 11, fontWeight: 700, color: '#15803d', marginBottom: 6 }}>
-        ✓ Usuario creado — comparte estas credenciales:
-      </div>
-      <pre style={{
-        fontSize: 12, fontFamily: 'monospace', color: '#166534',
-        background: 'white', border: '1px solid #bbf7d0', borderRadius: 4,
-        padding: '8px 10px', margin: '0 0 8px', lineHeight: 1.6,
-      }}>
-        {texto}
-      </pre>
-      <button onClick={copiar} style={btnBase('#dcfce7', '#15803d', '#86efac')}>
-        {copiado ? '✓ Copiado' : 'Copiar credenciales'}
-      </button>
+    <div style={{ background: '#f0fdf4', border: '1px solid #86efac', borderRadius: 6, padding: 12, marginTop: 10 }}>
+      <div style={{ fontSize: 11, fontWeight: 700, color: '#15803d', marginBottom: 6 }}>✓ Usuario creado — comparte estas credenciales:</div>
+      <pre style={{ fontSize: 12, fontFamily: 'monospace', color: '#166534', background: 'white', border: '1px solid #bbf7d0', borderRadius: 4, padding: '8px 10px', margin: '0 0 8px', lineHeight: 1.6 }}>{texto}</pre>
+      <button onClick={copiar} style={btnBase('#dcfce7', '#15803d', '#86efac')}>{copiado ? '✓ Copiado' : 'Copiar credenciales'}</button>
     </div>
   );
+}
+
+// ─── PDF Export ───────────────────────────────────────────────────────────────
+
+function exportarPDF(residentes) {
+  const doc   = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+  const W     = 210;
+  const margin = 18;
+  const col   = W - margin * 2;
+  let y       = 20;
+
+  const fechaHoy = new Date().toLocaleDateString('es-ES', { day: '2-digit', month: 'long', year: 'numeric' });
+
+  // ── Cabecera ──
+  doc.setFillColor(29, 78, 216);
+  doc.rect(0, 0, W, 28, 'F');
+  doc.setTextColor(255, 255, 255);
+  doc.setFontSize(18); doc.setFont('helvetica', 'bold');
+  doc.text('KINACT', margin, 13);
+  doc.setFontSize(9); doc.setFont('helvetica', 'normal');
+  doc.text('Residencia Santa Clara · Informe de Residentes', margin, 20);
+  doc.text(fechaHoy, W - margin, 20, { align: 'right' });
+
+  y = 38;
+
+  // ── Resumen general ──
+  doc.setTextColor(17, 24, 39);
+  doc.setFontSize(11); doc.setFont('helvetica', 'bold');
+  doc.text('Resumen del programa', margin, y); y += 6;
+
+  doc.setFontSize(9); doc.setFont('helvetica', 'normal');
+  doc.setTextColor(107, 114, 128);
+  doc.text(`Total de residentes: ${residentes.length}`, margin, y); y += 5;
+  const totalSesiones = residentes.reduce((s, r) => s + (r.sesiones || 0), 0);
+  doc.text(`Total de sesiones registradas: ${totalSesiones}`, margin, y); y += 5;
+  const tableros = ['casa', 'barco', 'flor', 'cafe'];
+  tableros.forEach(t => {
+    const n = residentes.filter(r => r.tablero_habitual === t || r.tableroHabitual === t).length;
+    if (n > 0) doc.text(`  · Tablero ${t}: ${n} residente${n > 1 ? 's' : ''}`, margin + 4, y += 4);
+  });
+
+  y += 10;
+
+  // ── Ficha por residente ──
+  residentes.forEach((r, i) => {
+    // Salto de página si no cabe la ficha (~55mm por residente)
+    if (y > 240) { doc.addPage(); y = 20; }
+
+    // Fondo de tarjeta
+    doc.setFillColor(249, 250, 251);
+    doc.roundedRect(margin, y, col, 52, 3, 3, 'F');
+    doc.setDrawColor(229, 231, 235);
+    doc.roundedRect(margin, y, col, 52, 3, 3, 'S');
+
+    // Avatar circular
+    doc.setFillColor(219, 234, 254);
+    doc.circle(margin + 12, y + 12, 8, 'F');
+    doc.setTextColor(29, 78, 216);
+    doc.setFontSize(9); doc.setFont('helvetica', 'bold');
+    const iniciales = r.iniciales || (r.nombre || '').split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase();
+    doc.text(iniciales, margin + 12, y + 13.5, { align: 'center' });
+
+    // Nombre y tablero
+    doc.setTextColor(17, 24, 39);
+    doc.setFontSize(12); doc.setFont('helvetica', 'bold');
+    doc.text(r.nombre || '—', margin + 24, y + 10);
+
+    doc.setFontSize(8); doc.setFont('helvetica', 'normal');
+    doc.setTextColor(107, 114, 128);
+    const tablero = r.tablero_habitual || r.tableroHabitual || '—';
+    doc.text(`Tablero: ${tablero}`, margin + 24, y + 16);
+
+    // Línea separadora
+    doc.setDrawColor(229, 231, 235);
+    doc.line(margin + 8, y + 22, margin + col - 8, y + 22);
+
+    // Datos clave en columnas
+    const datos = [
+      { label: 'Sesiones completadas', valor: String(r.sesiones ?? 0) },
+      { label: 'Fecha de incorporación', valor: r.incorporacion || r.created_at?.split('T')[0] || '—' },
+      { label: 'Estado',                 valor: (r.sesiones ?? 0) > 0 ? 'Activo en programa' : 'Sin sesiones' },
+    ];
+
+    const colW = col / 3;
+    datos.forEach((d, j) => {
+      const cx = margin + j * colW + colW / 2;
+      doc.setFontSize(7); doc.setFont('helvetica', 'normal');
+      doc.setTextColor(107, 114, 128);
+      doc.text(d.label, cx, y + 30, { align: 'center' });
+      doc.setFontSize(10); doc.setFont('helvetica', 'bold');
+      doc.setTextColor(17, 24, 39);
+      doc.text(d.valor, cx, y + 37, { align: 'center' });
+    });
+
+    // Número de residente
+    doc.setFontSize(7); doc.setFont('helvetica', 'normal');
+    doc.setTextColor(156, 163, 175);
+    doc.text(`Residente #${i + 1}`, margin + col - 4, y + 7, { align: 'right' });
+
+    y += 58;
+  });
+
+  // ── Pie de página ──
+  const pages = doc.getNumberOfPages();
+  for (let p = 1; p <= pages; p++) {
+    doc.setPage(p);
+    doc.setFontSize(7); doc.setFont('helvetica', 'normal');
+    doc.setTextColor(156, 163, 175);
+    doc.text(`KINACT · Residencia Santa Clara · Generado el ${fechaHoy} · Pág. ${p}/${pages}`, W / 2, 290, { align: 'center' });
+  }
+
+  doc.save(`kinact-residentes-${new Date().toISOString().split('T')[0]}.pdf`);
 }
 
 // ─── Pestaña: Residentes ──────────────────────────────────────────────────────
 
 function TabResidentes() {
   const { navigateTo } = useApp();
-  const [residentes, setResidentes] = useState(MOCK_RESIDENTS);
-  const [formAbierto, setFormAbierto] = useState(false);
-  const [exito, setExito] = useState(false);
+  const [residentes,   setResidentes]   = useState([]);
+  const [cargando,     setCargando]     = useState(true);
+  const [formAbierto,  setFormAbierto]  = useState(false);
+  const [guardando,    setGuardando]    = useState(false);
+  const [error,        setError]        = useState('');
+  const [exito,        setExito]        = useState('');
   const [form, setForm] = useState({
-    nombre: '', iniciales: '', tableroHabitual: 'casa',
-    incorporacion: new Date().toISOString().split('T')[0], observaciones: '',
+    nombre: '', iniciales: '', tablero_habitual: 'casa',
+    incorporacion: new Date().toISOString().split('T')[0],
   });
 
   const set = (k, v) => setForm(prev => ({ ...prev, [k]: v }));
 
-  const guardar = () => {
+  // ── Cargar desde Supabase ──
+  const cargarResidentes = async () => {
+    setCargando(true);
+    const { data, error: err } = await supabase
+      .from('residentes')
+      .select('*')
+      .eq('centro_id', CENTRO_ID)
+      .order('created_at', { ascending: true });
+    if (!err) setResidentes(data || []);
+    setCargando(false);
+  };
+
+  useEffect(() => { cargarResidentes(); }, []);
+
+  // ── Guardar en Supabase ──
+  const guardar = async () => {
     if (!form.nombre.trim() || !form.iniciales.trim()) return;
-    const nuevo = {
-      id: 'r' + Date.now(),
-      nombre: form.nombre.trim(),
-      iniciales: form.iniciales.trim().toUpperCase().slice(0, 2),
-      tableroHabitual: form.tableroHabitual,
-      incorporacion: form.incorporacion,
-      sesiones: 0,
-    };
-    setResidentes(prev => [...prev, nuevo]);
-    setForm({ nombre: '', iniciales: '', tableroHabitual: 'casa', incorporacion: new Date().toISOString().split('T')[0], observaciones: '' });
-    setFormAbierto(false);
-    setExito(true);
-    setTimeout(() => setExito(false), 3000);
+    setGuardando(true);
+    setError('');
+
+    const { error: err } = await supabase.from('residentes').insert({
+      nombre:           form.nombre.trim(),
+      iniciales:        form.iniciales.trim().toUpperCase().slice(0, 2),
+      tablero_habitual: form.tablero_habitual,
+      incorporacion:    form.incorporacion,
+      sesiones:         0,
+      centro_id:        CENTRO_ID,
+    });
+
+    if (err) {
+      setError('Error al guardar: ' + err.message);
+    } else {
+      setForm({ nombre: '', iniciales: '', tablero_habitual: 'casa', incorporacion: new Date().toISOString().split('T')[0] });
+      setFormAbierto(false);
+      setExito('Residente guardado correctamente en la base de datos ✓');
+      setTimeout(() => setExito(''), 4000);
+      cargarResidentes();
+    }
+    setGuardando(false);
   };
 
   return (
     <div>
-      {/* Cabecera pestaña */}
+      {/* Cabecera */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-        <div style={{ fontSize: 13, color: '#6b7280' }}>{residentes.length} residente{residentes.length !== 1 ? 's' : ''} en programa</div>
-        <button onClick={() => setFormAbierto(v => !v)} style={btnBase('#dbeafe', '#1d4ed8', '#93c5fd')}>
-          {formAbierto ? '✕ Cancelar' : '+ Añadir residente'}
-        </button>
+        <div style={{ fontSize: 13, color: '#6b7280' }}>
+          {cargando ? 'Cargando…' : `${residentes.length} residente${residentes.length !== 1 ? 's' : ''} en programa`}
+        </div>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button
+            onClick={() => exportarPDF(residentes)}
+            disabled={cargando || residentes.length === 0}
+            style={btnBase('#fef3c7', '#92400e', '#fcd34d')}
+          >
+            Exportar PDF
+          </button>
+          <button
+            onClick={() => setFormAbierto(v => !v)}
+            style={btnBase('#dbeafe', '#1d4ed8', '#93c5fd')}
+          >
+            {formAbierto ? '✕ Cancelar' : '+ Añadir residente'}
+          </button>
+        </div>
       </div>
 
-      {/* Mensaje éxito */}
+      {/* Mensajes */}
       {exito && (
         <div style={{ background: '#f0fdf4', border: '1px solid #86efac', borderRadius: 6, padding: '8px 12px', marginBottom: 10, fontSize: 13, color: '#15803d', fontWeight: 600 }}>
-          ✓ Residente añadido correctamente
+          {exito}
+        </div>
+      )}
+      {error && (
+        <div style={{ background: '#fff5f5', border: '1px solid #fecaca', borderRadius: 6, padding: '8px 12px', marginBottom: 10, fontSize: 13, color: '#991b1b', fontWeight: 600 }}>
+          {error}
         </div>
       )}
 
@@ -160,55 +276,53 @@ function TabResidentes() {
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
             {fieldWrap(<><label style={labelStyle()}>Nombre completo *</label><input style={inputStyle()} value={form.nombre} onChange={e => set('nombre', e.target.value)} placeholder="Ej: María Carmen López" /></>)}
             {fieldWrap(<><label style={labelStyle()}>Iniciales * (máx. 2)</label><input style={inputStyle()} value={form.iniciales} onChange={e => set('iniciales', e.target.value)} maxLength={2} placeholder="MC" /></>)}
-            {fieldWrap(<><label style={labelStyle()}>Tablero habitual</label>
-              <select style={inputStyle()} value={form.tableroHabitual} onChange={e => set('tableroHabitual', e.target.value)}>
+            {fieldWrap(<>
+              <label style={labelStyle()}>Tablero habitual</label>
+              <select style={inputStyle()} value={form.tablero_habitual} onChange={e => set('tablero_habitual', e.target.value)}>
                 <option value="casa">Casa</option>
                 <option value="barco">Barco</option>
                 <option value="flor">Flor</option>
                 <option value="cafe">Café</option>
-              </select></>)}
+              </select>
+            </>)}
             {fieldWrap(<><label style={labelStyle()}>Fecha de incorporación</label><input type="date" style={inputStyle()} value={form.incorporacion} onChange={e => set('incorporacion', e.target.value)} /></>)}
           </div>
-          {fieldWrap(<><label style={labelStyle()}>Observaciones iniciales (opcional)</label><textarea style={inputStyle({ resize: 'vertical', minHeight: 60 })} value={form.observaciones} onChange={e => set('observaciones', e.target.value)} placeholder="Notas clínicas relevantes al inicio del programa..." /></>)}
           <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 4 }}>
             <button onClick={() => setFormAbierto(false)} style={btnBase()}>Cancelar</button>
-            <button onClick={guardar} style={btnBase('#dbeafe', '#1d4ed8', '#93c5fd')}>Guardar residente</button>
+            <button onClick={guardar} disabled={guardando} style={btnBase('#dbeafe', '#1d4ed8', '#93c5fd')}>
+              {guardando ? 'Guardando…' : 'Guardar en base de datos'}
+            </button>
           </div>
         </div>
       )}
 
       {/* Lista */}
       <div style={{ background: 'white', border: '1px solid #e5e7eb', borderRadius: 10, overflow: 'hidden' }}>
-        {residentes.map((r, i) => (
+        {cargando ? (
+          <div style={{ padding: 24, textAlign: 'center', color: '#9ca3af', fontSize: 13 }}>Cargando residentes…</div>
+        ) : residentes.length === 0 ? (
+          <div style={{ padding: 24, textAlign: 'center', color: '#9ca3af', fontSize: 13 }}>No hay residentes registrados aún.</div>
+        ) : residentes.map((r, i) => (
           <div key={r.id} style={{
             display: 'flex', alignItems: 'center', justifyContent: 'space-between',
             padding: '12px 16px',
             borderBottom: i < residentes.length - 1 ? '1px solid #f3f4f6' : 'none',
           }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-              <div style={{
-                width: 34, height: 34, borderRadius: '50%',
-                background: '#f3f4f6', color: '#374151',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                fontSize: 11, fontWeight: 700,
-              }}>
+              <div style={{ width: 34, height: 34, borderRadius: '50%', background: '#f3f4f6', color: '#374151', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700 }}>
                 {r.iniciales}
               </div>
               <div>
                 <div style={{ fontSize: 13, fontWeight: 600, color: '#111827' }}>{r.nombre}</div>
                 <div style={{ fontSize: 11, color: '#9ca3af', marginTop: 2 }}>
-                  {r.sesiones} sesione{r.sesiones !== 1 ? 's' : ''} · desde {r.incorporacion}
+                  {r.sesiones ?? 0} sesione{(r.sesiones ?? 0) !== 1 ? 's' : ''} · desde {r.incorporacion || '—'}
+                  <span style={{ marginLeft: 8, fontSize: 10, color: '#d1d5db' }}>· Supabase ✓</span>
                 </div>
               </div>
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              <BadgeTablero tablero={r.tableroHabitual} />
-              <button
-                onClick={() => navigateTo('resident', { residentId: r.id })}
-                style={btnBase()}
-              >
-                Ver perfil
-              </button>
+              <BadgeTablero tablero={r.tablero_habitual} />
+              <button onClick={() => navigateTo('resident', { residentId: r.id })} style={btnBase()}>Ver perfil</button>
             </div>
           </div>
         ))}
@@ -220,19 +334,18 @@ function TabResidentes() {
 // ─── Pestaña: Facilitadores ───────────────────────────────────────────────────
 
 const FACILITADORES_INICIAL = [
-  { id: 'f1', nombre: 'Ana Martínez', email: 'ana.martinez@santaclara.es', activo: true },
-  { id: 'f2', nombre: 'Carlos López', email: 'carlos.lopez@santaclara.es', activo: true },
+  { id: 'f1', nombre: 'Ana Martínez',  email: 'ana.martinez@santaclara.es',  activo: true },
+  { id: 'f2', nombre: 'Carlos López',  email: 'carlos.lopez@santaclara.es',  activo: true },
 ];
 
 function TabFacilitadores() {
   const [facilitadores, setFacilitadores] = useState(FACILITADORES_INICIAL);
-  const [formAbierto, setFormAbierto] = useState(false);
-  const [credenciales, setCredenciales] = useState(null);
-  const [mostrarPass, setMostrarPass] = useState(false);
+  const [formAbierto,   setFormAbierto]   = useState(false);
+  const [credenciales,  setCredenciales]  = useState(null);
+  const [mostrarPass,   setMostrarPass]   = useState(false);
   const [form, setForm] = useState({ nombre: '', email: '', password: '' });
 
   const set = (k, v) => setForm(prev => ({ ...prev, [k]: v }));
-
   const generar = () => set('password', generarPassword());
 
   const guardar = () => {
@@ -250,7 +363,7 @@ function TabFacilitadores() {
   return (
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-        <div style={{ fontSize: 13, color: '#6b7280' }}>{facilitadores.filter(f => f.activo).length} facilitador{facilitadores.filter(f => f.activo).length !== 1 ? 'es' : ''} activo{facilitadores.filter(f => f.activo).length !== 1 ? 's' : ''}</div>
+        <div style={{ fontSize: 13, color: '#6b7280' }}>{facilitadores.filter(f => f.activo).length} facilitador{facilitadores.filter(f => f.activo).length !== 1 ? 'es activos' : ' activo'}</div>
         <button onClick={() => { setFormAbierto(v => !v); setCredenciales(null); }} style={btnBase('#dbeafe', '#1d4ed8', '#93c5fd')}>
           {formAbierto ? '✕ Cancelar' : '+ Añadir facilitador'}
         </button>
@@ -265,29 +378,18 @@ function TabFacilitadores() {
             {fieldWrap(<><label style={labelStyle()}>Nombre completo *</label><input style={inputStyle()} value={form.nombre} onChange={e => set('nombre', e.target.value)} placeholder="Ej: Ana Martínez" /></>)}
             {fieldWrap(<><label style={labelStyle()}>Email (será su usuario) *</label><input type="email" style={inputStyle()} value={form.email} onChange={e => set('email', e.target.value)} placeholder="ana@centro.es" /></>)}
           </div>
-          {fieldWrap(
-            <div>
-              <label style={labelStyle()}>Contraseña * (mín. 8 caracteres)</label>
-              <div style={{ display: 'flex', gap: 6 }}>
-                <div style={{ position: 'relative', flex: 1 }}>
-                  <input
-                    type={mostrarPass ? 'text' : 'password'}
-                    style={inputStyle({ paddingRight: 36 })}
-                    value={form.password}
-                    onChange={e => set('password', e.target.value)}
-                    placeholder="Contraseña"
-                  />
-                  <button
-                    onClick={() => setMostrarPass(v => !v)}
-                    style={{ position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', fontSize: 14, color: '#6b7280' }}
-                  >
-                    {mostrarPass ? '🙈' : '👁'}
-                  </button>
-                </div>
-                <button onClick={generar} style={btnBase('#f3f4f6', '#374151', '#e5e7eb')}>Generar</button>
+          {fieldWrap(<div>
+            <label style={labelStyle()}>Contraseña * (mín. 8 caracteres)</label>
+            <div style={{ display: 'flex', gap: 6 }}>
+              <div style={{ position: 'relative', flex: 1 }}>
+                <input type={mostrarPass ? 'text' : 'password'} style={inputStyle({ paddingRight: 36 })} value={form.password} onChange={e => set('password', e.target.value)} placeholder="Contraseña" />
+                <button onClick={() => setMostrarPass(v => !v)} style={{ position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', fontSize: 14, color: '#6b7280' }}>
+                  {mostrarPass ? '🙈' : '👁'}
+                </button>
               </div>
+              <button onClick={generar} style={btnBase('#f3f4f6', '#374151', '#e5e7eb')}>Generar</button>
             </div>
-          )}
+          </div>)}
           <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 4 }}>
             <button onClick={() => setFormAbierto(false)} style={btnBase()}>Cancelar</button>
             <button onClick={guardar} style={btnBase('#dbeafe', '#1d4ed8', '#93c5fd')}>Crear facilitador</button>
@@ -297,19 +399,9 @@ function TabFacilitadores() {
 
       <div style={{ background: 'white', border: '1px solid #e5e7eb', borderRadius: 10, overflow: 'hidden' }}>
         {facilitadores.map((f, i) => (
-          <div key={f.id} style={{
-            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-            padding: '12px 16px',
-            borderBottom: i < facilitadores.length - 1 ? '1px solid #f3f4f6' : 'none',
-            opacity: f.activo ? 1 : 0.5,
-          }}>
+          <div key={f.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', borderBottom: i < facilitadores.length - 1 ? '1px solid #f3f4f6' : 'none', opacity: f.activo ? 1 : 0.5 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-              <div style={{
-                width: 34, height: 34, borderRadius: '50%',
-                background: '#eff6ff', color: '#1d4ed8',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                fontSize: 13, fontWeight: 700,
-              }}>
+              <div style={{ width: 34, height: 34, borderRadius: '50%', background: '#eff6ff', color: '#1d4ed8', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 700 }}>
                 {f.nombre.split(' ').map(n => n[0]).join('').slice(0, 2)}
               </div>
               <div>
@@ -319,11 +411,7 @@ function TabFacilitadores() {
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
               <BadgeActivo activo={f.activo} />
-              {f.activo && (
-                <button onClick={() => desactivar(f.id)} style={btnBase('#fff5f5', '#991b1b', '#fecaca')}>
-                  Desactivar
-                </button>
-              )}
+              {f.activo && <button onClick={() => desactivar(f.id)} style={btnBase('#fff5f5', '#991b1b', '#fecaca')}>Desactivar</button>}
             </div>
           </div>
         ))}
@@ -335,39 +423,43 @@ function TabFacilitadores() {
 // ─── Pestaña: Familiares ──────────────────────────────────────────────────────
 
 const FAMILIARES_INICIAL = [
-  { id: 'fam1', nombre: 'Rosa García', email: 'rosa.garcia@email.com', residenteId: 'r2', activo: true },
-  { id: 'fam2', nombre: 'Pilar Ruiz',  email: 'pilar.ruiz@email.com',  residenteId: 'r3', activo: true },
+  { id: 'fam1', nombre: 'Rosa García', email: 'rosa.garcia@email.com', residenteId: '00000000-0000-0001-0000-000000000002', activo: true },
+  { id: 'fam2', nombre: 'Pilar Ruiz',  email: 'pilar.ruiz@email.com',  residenteId: '00000000-0000-0001-0000-000000000003', activo: true },
 ];
 
 function TabFamiliares() {
-  const [familiares, setFamiliares] = useState(FAMILIARES_INICIAL);
-  const [residentes] = useState(MOCK_RESIDENTS);
-  const [formAbierto, setFormAbierto] = useState(false);
+  const [familiares,   setFamiliares]   = useState(FAMILIARES_INICIAL);
+  const [residentes,   setResidentes]   = useState([]);
+  const [formAbierto,  setFormAbierto]  = useState(false);
   const [credenciales, setCredenciales] = useState(null);
-  const [mostrarPass, setMostrarPass] = useState(false);
-  const [form, setForm] = useState({ nombre: '', email: '', password: '', residenteId: MOCK_RESIDENTS[0]?.id || '' });
+  const [mostrarPass,  setMostrarPass]  = useState(false);
+  const [form, setForm] = useState({ nombre: '', email: '', password: '', residenteId: '' });
+
+  useEffect(() => {
+    supabase.from('residentes').select('id,nombre').eq('centro_id', CENTRO_ID).then(({ data }) => {
+      if (data) { setResidentes(data); setForm(f => ({ ...f, residenteId: data[0]?.id || '' })); }
+    });
+  }, []);
 
   const set = (k, v) => setForm(prev => ({ ...prev, [k]: v }));
   const generar = () => set('password', generarPassword());
 
   const guardar = () => {
     if (!form.nombre.trim() || !form.email.trim() || !form.residenteId || form.password.length < 8) return;
-    const nuevo = { id: 'fam' + Date.now(), nombre: form.nombre.trim(), email: form.email.trim(), residenteId: form.residenteId, activo: true };
-    setFamiliares(prev => [...prev, nuevo]);
+    setFamiliares(prev => [...prev, { id: 'fam' + Date.now(), nombre: form.nombre.trim(), email: form.email.trim(), residenteId: form.residenteId, activo: true }]);
     setCredenciales({ email: form.email.trim(), password: form.password });
-    setForm({ nombre: '', email: '', password: '', residenteId: MOCK_RESIDENTS[0]?.id || '' });
+    setForm(f => ({ ...f, nombre: '', email: '', password: '' }));
     setFormAbierto(false);
     setMostrarPass(false);
   };
 
   const revocar = (id) => setFamiliares(prev => prev.map(f => f.id === id ? { ...f, activo: false } : f));
-
   const nombreResidente = (rid) => residentes.find(r => r.id === rid)?.nombre || '—';
 
   return (
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-        <div style={{ fontSize: 13, color: '#6b7280' }}>{familiares.filter(f => f.activo).length} acceso{familiares.filter(f => f.activo).length !== 1 ? 's' : ''} activo{familiares.filter(f => f.activo).length !== 1 ? 's' : ''}</div>
+        <div style={{ fontSize: 13, color: '#6b7280' }}>{familiares.filter(f => f.activo).length} acceso{familiares.filter(f => f.activo).length !== 1 ? 's activos' : ' activo'}</div>
         <button onClick={() => { setFormAbierto(v => !v); setCredenciales(null); }} style={btnBase('#dbeafe', '#1d4ed8', '#93c5fd')}>
           {formAbierto ? '✕ Cancelar' : '+ Dar acceso a familiar'}
         </button>
@@ -387,29 +479,18 @@ function TabFamiliares() {
                 {residentes.map(r => <option key={r.id} value={r.id}>{r.nombre}</option>)}
               </select>
             </>)}
-            {fieldWrap(
-              <div>
-                <label style={labelStyle()}>Contraseña * (mín. 8 caracteres)</label>
-                <div style={{ display: 'flex', gap: 6 }}>
-                  <div style={{ position: 'relative', flex: 1 }}>
-                    <input
-                      type={mostrarPass ? 'text' : 'password'}
-                      style={inputStyle({ paddingRight: 36 })}
-                      value={form.password}
-                      onChange={e => set('password', e.target.value)}
-                      placeholder="Contraseña"
-                    />
-                    <button
-                      onClick={() => setMostrarPass(v => !v)}
-                      style={{ position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', fontSize: 14, color: '#6b7280' }}
-                    >
-                      {mostrarPass ? '🙈' : '👁'}
-                    </button>
-                  </div>
-                  <button onClick={generar} style={btnBase('#f3f4f6', '#374151', '#e5e7eb')}>Generar</button>
+            {fieldWrap(<div>
+              <label style={labelStyle()}>Contraseña * (mín. 8 caracteres)</label>
+              <div style={{ display: 'flex', gap: 6 }}>
+                <div style={{ position: 'relative', flex: 1 }}>
+                  <input type={mostrarPass ? 'text' : 'password'} style={inputStyle({ paddingRight: 36 })} value={form.password} onChange={e => set('password', e.target.value)} placeholder="Contraseña" />
+                  <button onClick={() => setMostrarPass(v => !v)} style={{ position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', fontSize: 14, color: '#6b7280' }}>
+                    {mostrarPass ? '🙈' : '👁'}
+                  </button>
                 </div>
+                <button onClick={generar} style={btnBase('#f3f4f6', '#374151', '#e5e7eb')}>Generar</button>
               </div>
-            )}
+            </div>)}
           </div>
           <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 4 }}>
             <button onClick={() => setFormAbierto(false)} style={btnBase()}>Cancelar</button>
@@ -420,19 +501,9 @@ function TabFamiliares() {
 
       <div style={{ background: 'white', border: '1px solid #e5e7eb', borderRadius: 10, overflow: 'hidden' }}>
         {familiares.map((f, i) => (
-          <div key={f.id} style={{
-            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-            padding: '12px 16px',
-            borderBottom: i < familiares.length - 1 ? '1px solid #f3f4f6' : 'none',
-            opacity: f.activo ? 1 : 0.5,
-          }}>
+          <div key={f.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', borderBottom: i < familiares.length - 1 ? '1px solid #f3f4f6' : 'none', opacity: f.activo ? 1 : 0.5 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-              <div style={{
-                width: 34, height: 34, borderRadius: '50%',
-                background: '#fef3c7', color: '#92400e',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                fontSize: 13, fontWeight: 700,
-              }}>
+              <div style={{ width: 34, height: 34, borderRadius: '50%', background: '#fef3c7', color: '#92400e', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 700 }}>
                 {f.nombre.split(' ').map(n => n[0]).join('').slice(0, 2)}
               </div>
               <div>
@@ -444,11 +515,7 @@ function TabFamiliares() {
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
               <BadgeActivo activo={f.activo} />
-              {f.activo && (
-                <button onClick={() => revocar(f.id)} style={btnBase('#fff5f5', '#991b1b', '#fecaca')}>
-                  Revocar acceso
-                </button>
-              )}
+              {f.activo && <button onClick={() => revocar(f.id)} style={btnBase('#fff5f5', '#991b1b', '#fecaca')}>Revocar acceso</button>}
             </div>
           </div>
         ))}
@@ -460,9 +527,9 @@ function TabFamiliares() {
 // ─── UserManagement ───────────────────────────────────────────────────────────
 
 const TABS = [
-  { id: 'residentes',    label: 'Residentes' },
+  { id: 'residentes',    label: 'Residentes'    },
   { id: 'facilitadores', label: 'Facilitadores' },
-  { id: 'familiares',    label: 'Familiares' },
+  { id: 'familiares',    label: 'Familiares'    },
 ];
 
 export default function UserManagement() {
@@ -472,17 +539,10 @@ export default function UserManagement() {
   return (
     <div style={{ minHeight: '100vh', background: '#f9fafb', fontFamily: 'inherit' }}>
 
-      {/* ── Cabecera ── */}
-      <div style={{
-        background: 'white', borderBottom: '1px solid #e5e7eb',
-        padding: '16px 24px',
-        display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-      }}>
+      {/* Cabecera */}
+      <div style={{ background: 'white', borderBottom: '1px solid #e5e7eb', padding: '16px 24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-          <button
-            onClick={() => navigateTo('center')}
-            style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 13, color: '#6b7280', fontFamily: 'inherit', display: 'flex', alignItems: 'center', gap: 4, padding: 0 }}
-          >
+          <button onClick={() => navigateTo('center')} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 13, color: '#6b7280', fontFamily: 'inherit', padding: 0 }}>
             ← Volver al dashboard
           </button>
           <div style={{ width: 1, height: 20, background: '#e5e7eb' }} />
@@ -493,33 +553,18 @@ export default function UserManagement() {
         </div>
       </div>
 
-      {/* ── Pestañas ── */}
+      {/* Pestañas */}
       <div style={{ background: 'white', borderBottom: '1px solid #e5e7eb', padding: '0 24px' }}>
-        <div style={{ display: 'flex', gap: 0 }}>
+        <div style={{ display: 'flex' }}>
           {TABS.map(tab => (
-            <button
-              key={tab.id}
-              onClick={() => setTabActiva(tab.id)}
-              style={{
-                padding: '12px 20px',
-                fontSize: 13,
-                fontWeight: 600,
-                fontFamily: 'inherit',
-                background: 'none',
-                border: 'none',
-                cursor: 'pointer',
-                borderBottom: tabActiva === tab.id ? '2px solid #1d4ed8' : '2px solid transparent',
-                color: tabActiva === tab.id ? '#1d4ed8' : '#6b7280',
-                transition: 'color .15s',
-              }}
-            >
+            <button key={tab.id} onClick={() => setTabActiva(tab.id)} style={{ padding: '12px 20px', fontSize: 13, fontWeight: 600, fontFamily: 'inherit', background: 'none', border: 'none', cursor: 'pointer', borderBottom: tabActiva === tab.id ? '2px solid #1d4ed8' : '2px solid transparent', color: tabActiva === tab.id ? '#1d4ed8' : '#6b7280' }}>
               {tab.label}
             </button>
           ))}
         </div>
       </div>
 
-      {/* ── Contenido ── */}
+      {/* Contenido */}
       <div style={{ maxWidth: 860, margin: '0 auto', padding: '24px 24px 48px' }}>
         {tabActiva === 'residentes'    && <TabResidentes />}
         {tabActiva === 'facilitadores' && <TabFacilitadores />}
