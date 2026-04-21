@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { jsPDF } from 'jspdf';
 import { useApp } from '../../../context/AppContext';
 import { MOCK_RESIDENTS, MOCK_SESSION_HISTORY, MOCK_ESCALAS } from '../../../data/mockData';
 import { TABLERO_COLORS } from '../../../constants/tableros';
@@ -61,6 +62,261 @@ const ESCALAS_DEF = [
   { id: 'barthel', nombre: 'Barthel', desc: 'Índice de dependencia funcional', colorFn: colorBarthel, interpFn: interpretaBarthel, unidad: 'pts', inversa: false },
   { id: 'tug',     nombre: 'TUG',     desc: 'Timed Up and Go (movilidad)',     colorFn: colorTUG, interpFn: interpretaTUG, unidad: 's',   inversa: true  }
 ];
+
+// ─── PDF Export ───────────────────────────────────────────────────────────────
+
+function exportarPDF(residente, historial, escalas, metricas) {
+  const doc     = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+  const W       = 210;
+  const M       = 16;           // margen lateral
+  const col     = W - M * 2;
+  const hoy     = new Date().toLocaleDateString('es-ES', { day: '2-digit', month: 'long', year: 'numeric' });
+  let y         = 0;
+
+  // ── Helpers de dibujo ──────────────────────────────────────────────────────
+  const saltoSiNecesario = (h = 30) => {
+    if (y + h > 275) { doc.addPage(); y = 20; }
+  };
+
+  const seccion = (titulo) => {
+    saltoSiNecesario(14);
+    doc.setFillColor(241, 245, 249);
+    doc.rect(M, y, col, 7, 'F');
+    doc.setFontSize(8); doc.setFont('helvetica', 'bold');
+    doc.setTextColor(51, 65, 85);
+    doc.text(titulo.toUpperCase(), M + 3, y + 4.8);
+    y += 10;
+  };
+
+  const fila = (cols, alturas = 6, fondoPar = false, i = 0) => {
+    saltoSiNecesario(alturas + 2);
+    if (fondoPar && i % 2 === 0) {
+      doc.setFillColor(249, 250, 251);
+      doc.rect(M, y, col, alturas, 'F');
+    }
+    const anchos = Array.isArray(cols[0]) ? cols.map(c => c[1]) : null;
+    const textos = Array.isArray(cols[0]) ? cols.map(c => c[0]) : cols;
+    let x = M + 2;
+    textos.forEach((t, idx) => {
+      const ancho = anchos ? anchos[idx] : col / textos.length;
+      doc.text(String(t ?? '—'), x, y + alturas - 1.5);
+      x += ancho;
+    });
+    doc.setDrawColor(229, 231, 235);
+    doc.line(M, y + alturas, M + col, y + alturas);
+    y += alturas;
+  };
+
+  // ── CABECERA ────────────────────────────────────────────────────────────────
+  doc.setFillColor(29, 78, 216);
+  doc.rect(0, 0, W, 30, 'F');
+
+  doc.setTextColor(255, 255, 255);
+  doc.setFontSize(20); doc.setFont('helvetica', 'bold');
+  doc.text('KINACT', M, 13);
+  doc.setFontSize(9); doc.setFont('helvetica', 'normal');
+  doc.text('Informe individual de residente', M, 20);
+  doc.text('Residencia Santa Clara', M, 26);
+  doc.setFontSize(9);
+  doc.text(hoy, W - M, 20, { align: 'right' });
+
+  y = 38;
+
+  // ── DATOS DEL RESIDENTE ─────────────────────────────────────────────────────
+  doc.setFillColor(239, 246, 255);
+  doc.roundedRect(M, y, col, 22, 3, 3, 'F');
+
+  // Avatar
+  doc.setFillColor(29, 78, 216);
+  doc.circle(M + 11, y + 11, 8, 'F');
+  doc.setTextColor(255, 255, 255);
+  doc.setFontSize(9); doc.setFont('helvetica', 'bold');
+  doc.text(residente.iniciales, M + 11, y + 13, { align: 'center' });
+
+  // Info
+  doc.setTextColor(17, 24, 39);
+  doc.setFontSize(14); doc.setFont('helvetica', 'bold');
+  doc.text(residente.nombre, M + 23, y + 10);
+  doc.setFontSize(8); doc.setFont('helvetica', 'normal');
+  doc.setTextColor(71, 85, 105);
+  doc.text(
+    `Tablero: ${residente.tableroHabitual}   ·   Incorporación: ${residente.incorporacion}   ·   ${residente.sesiones} sesiones completadas`,
+    M + 23, y + 17
+  );
+
+  y += 28;
+
+  // ── MÉTRICAS CLAVE ──────────────────────────────────────────────────────────
+  seccion('Métricas de rendimiento');
+
+  const metW = col / 4;
+  metricas.forEach((m, i) => {
+    const x = M + i * metW;
+    doc.setFillColor(255, 255, 255);
+    doc.roundedRect(x, y, metW - 2, 18, 2, 2, 'FD');
+    doc.setDrawColor(229, 231, 235);
+
+    doc.setFontSize(14); doc.setFont('helvetica', 'bold');
+    doc.setTextColor(17, 24, 39);
+    doc.text(String(m.valor), x + metW / 2 - 1, y + 9, { align: 'center' });
+
+    doc.setFontSize(7); doc.setFont('helvetica', 'normal');
+    doc.setTextColor(107, 114, 128);
+    doc.text(m.label, x + metW / 2 - 1, y + 14, { align: 'center' });
+
+    // Tendencia con color
+    const tendColor = m.tend === '→' ? [107,114,128] : (m.tend === '↑' && !m.inversa) || (m.tend === '↓' && m.inversa) ? [22,163,74] : [220,38,38];
+    doc.setTextColor(...tendColor);
+    doc.setFontSize(9); doc.setFont('helvetica', 'bold');
+    doc.text(m.tend, x + metW - 5, y + 5);
+  });
+
+  y += 24;
+
+  // ── ESCALAS CLÍNICAS ────────────────────────────────────────────────────────
+  seccion('Escalas clínicas validadas');
+
+  ESCALAS_DEF.forEach(def => {
+    const datos = escalas[def.id] || [];
+    saltoSiNecesario(8 + datos.length * 6);
+
+    // Título de escala
+    doc.setFontSize(9); doc.setFont('helvetica', 'bold');
+    doc.setTextColor(17, 24, 39);
+    doc.text(`${def.nombre} — ${def.desc}`, M + 2, y + 5);
+
+    if (datos.length === 0) {
+      doc.setFontSize(8); doc.setFont('helvetica', 'normal');
+      doc.setTextColor(156, 163, 175);
+      doc.text('Sin registros', M + 2, y + 11);
+      y += 14;
+      return;
+    }
+
+    y += 7;
+
+    // Cabecera tabla
+    doc.setFillColor(241, 245, 249);
+    doc.rect(M, y, col, 5.5, 'F');
+    doc.setFontSize(7); doc.setFont('helvetica', 'bold');
+    doc.setTextColor(71, 85, 105);
+    [[`Fecha`, 40], [`Valor`, 30], [`Interpretación`, 60], [`Tend.`, 20]].forEach(([t, w], i, arr) => {
+      let x = M + 2; arr.slice(0, i).forEach(([, ww]) => x += ww);
+      doc.text(t, x, y + 4);
+    });
+    y += 5.5;
+
+    // Filas
+    datos.forEach((d, i) => {
+      const prev = datos[i - 1];
+      const t = prev
+        ? d.valor < prev.valor ? (def.inversa ? '↑ Mejora' : '↓ Baja') : d.valor > prev.valor ? (def.inversa ? '↓ Baja' : '↑ Mejora') : '→ Estable'
+        : '— Inicial';
+
+      if (i % 2 === 0) { doc.setFillColor(249, 250, 251); doc.rect(M, y, col, 5.5, 'F'); }
+      doc.setFontSize(7.5); doc.setFont('helvetica', 'normal');
+      doc.setTextColor(17, 24, 39);
+
+      const tendColor = t.includes('Mejora') ? [22,163,74] : t.includes('Baja') ? [220,38,38] : [107,114,128];
+      const celdas = [
+        [fmtFecha(d.fecha), 40, [107,114,128]],
+        [`${d.valor} ${def.unidad}`, 30, [17,24,39]],
+        [def.interpFn(d.valor), 60, [71,85,105]],
+        [t, 20, tendColor]
+      ];
+      let x = M + 2;
+      celdas.forEach(([txt, w, rgb]) => {
+        doc.setTextColor(...rgb);
+        doc.text(String(txt), x, y + 4);
+        x += w;
+      });
+      doc.setDrawColor(229, 231, 235);
+      doc.line(M, y + 5.5, M + col, y + 5.5);
+      y += 5.5;
+    });
+    y += 5;
+  });
+
+  // ── HISTORIAL DE SESIONES ───────────────────────────────────────────────────
+  seccion('Historial de sesiones');
+
+  // Cabecera
+  doc.setFillColor(241, 245, 249);
+  doc.rect(M, y, col, 5.5, 'F');
+  doc.setFontSize(7); doc.setFont('helvetica', 'bold');
+  doc.setTextColor(71, 85, 105);
+  const hCols = [['Ses.', 14], ['Fecha', 26], ['Gaps', 18], ['Estado', 28], ['Engagement', 30], ['Autonomía', 30], ['Intercamb.', 22], ['Mediaciones', 10]];
+  let hx = M + 2;
+  hCols.forEach(([t, w]) => { doc.text(t, hx, y + 4); hx += w; });
+  y += 5.5;
+
+  historial.forEach((h, i) => {
+    saltoSiNecesario(6);
+    if (i % 2 === 0) { doc.setFillColor(249, 250, 251); doc.rect(M, y, col, 5.5, 'F'); }
+
+    const estadoColor = h.estado === 'positivo' ? [22,163,74] : h.estado === 'bajo' ? [220,38,38] : [71,85,105];
+    const autoColor   = h.autonomia === 'autonomo' ? [22,163,74] : h.autonomia === 'dependiente' ? [220,38,38] : [71,85,105];
+
+    const celdas = [
+      [`S${h.sesion}`,     14, [29,78,216]],
+      [fmtFechaCorta(h.fecha), 26, [107,114,128]],
+      [`${h.gapsCompletados}/9`, 18, [17,24,39]],
+      [h.estado,           28, estadoColor],
+      [h.engagement,       30, [71,85,105]],
+      [h.autonomia,        30, autoColor],
+      [String(h.intercambios), 22, [71,85,105]],
+      [String(h.mediaciones),  10, [71,85,105]]
+    ];
+    let cx = M + 2;
+    doc.setFontSize(7.5); doc.setFont('helvetica', 'normal');
+    celdas.forEach(([t, w, rgb]) => {
+      doc.setTextColor(...rgb);
+      doc.text(String(t), cx, y + 4);
+      cx += w;
+    });
+    doc.setDrawColor(229, 231, 235);
+    doc.line(M, y + 5.5, M + col, y + 5.5);
+    y += 5.5;
+  });
+
+  y += 6;
+
+  // ── RECOMENDACIÓN CLÍNICA ───────────────────────────────────────────────────
+  const sN = historial[historial.length - 1];
+  if (sN) {
+    saltoSiNecesario(20);
+    const recomendacion = sN.autonomia === 'autonomo' && sN.estado === 'positivo'
+      ? 'Mantener el nivel. Excelente progresión. El residente muestra autonomía completa y estado emocional positivo.'
+      : sN.mediaciones > 3
+        ? 'Considerar ejercicios de negociación grupal para reducir las mediaciones necesarias.'
+        : 'Buena evolución general. Continuar con el programa actual y monitorizar la progresión.';
+
+    doc.setFillColor(240, 253, 244);
+    doc.setDrawColor(134, 239, 172);
+    doc.roundedRect(M, y, col, 16, 3, 3, 'FD');
+    doc.setFontSize(8); doc.setFont('helvetica', 'bold');
+    doc.setTextColor(21, 128, 61);
+    doc.text('Recomendación clínica', M + 3, y + 6);
+    doc.setFontSize(8); doc.setFont('helvetica', 'normal');
+    doc.setTextColor(22, 101, 52);
+    doc.text(recomendacion, M + 3, y + 12, { maxWidth: col - 6 });
+    y += 20;
+  }
+
+  // ── PIE DE PÁGINA ───────────────────────────────────────────────────────────
+  const pages = doc.getNumberOfPages();
+  for (let p = 1; p <= pages; p++) {
+    doc.setPage(p);
+    doc.setFontSize(7); doc.setFont('helvetica', 'normal');
+    doc.setTextColor(156, 163, 175);
+    doc.text(
+      `KINACT · Residencia Santa Clara · ${residente.nombre} · Generado el ${hoy} · Pág. ${p}/${pages}`,
+      W / 2, 291, { align: 'center' }
+    );
+  }
+
+  doc.save(`kinact-${residente.nombre.replace(/\s+/g, '-').toLowerCase()}-${new Date().toISOString().split('T')[0]}.pdf`);
+}
 
 // ─── ResidentDashboard ────────────────────────────────────────────────────────
 
@@ -147,7 +403,7 @@ export default function ResidentDashboard() {
             </div>
           </div>
           <div style={{ display: 'flex', gap: 8 }}>
-            <button style={btnBase()}>Exportar PDF</button>
+            <button onClick={() => exportarPDF(residente, historial, escalas, METRICAS)} style={btnBase('#fef3c7', '#92400e', '#fcd34d')}>Exportar PDF</button>
             <button onClick={() => navigateTo('clinical-scales')} style={btnBase('#dbeafe', '#1d4ed8', '#93c5fd')}>Añadir escala clínica</button>
           </div>
         </div>
