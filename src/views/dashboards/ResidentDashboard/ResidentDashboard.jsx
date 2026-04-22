@@ -6,6 +6,71 @@ import { TABLERO_COLORS } from '../../../constants/tableros';
 import { fmtFecha, fmtFechaCorta } from '../../../utils/formatters';
 import { supabase } from '../../../lib/supabase';
 
+// ─── Modal de confirmación de borrado ─────────────────────────────────────────
+
+function ModalBorrar({ nombre, onConfirmar, onCancelar, borrando }) {
+  return (
+    <div style={{
+      position: 'fixed', inset: 0, zIndex: 9999,
+      background: 'rgba(0,0,0,0.55)',
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      padding: 16
+    }}>
+      <div style={{
+        background: 'white', borderRadius: 14,
+        padding: 24, maxWidth: 400, width: '100%',
+        display: 'flex', flexDirection: 'column', gap: 14,
+        boxShadow: '0 20px 60px rgba(0,0,0,0.3)'
+      }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          <span style={{ fontSize: 16, fontWeight: 700, color: '#111827' }}>
+            Borrar datos del programa
+          </span>
+          <span style={{ fontSize: 13, color: '#6b7280', lineHeight: 1.5 }}>
+            Se eliminarán <strong>todas las sesiones y escalas clínicas</strong> de{' '}
+            <strong>{nombre}</strong> guardadas en la base de datos.
+            Esta acción no se puede deshacer.
+          </span>
+        </div>
+
+        <div style={{
+          background: '#fef2f2', border: '1px solid #fecaca',
+          borderRadius: 8, padding: '8px 12px',
+          fontSize: 12, color: '#b91c1c'
+        }}>
+          ⚠️ Los datos de mock no se ven afectados. Solo se borran los registros reales de Supabase.
+        </div>
+
+        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+          <button
+            onClick={onCancelar}
+            disabled={borrando}
+            style={{
+              padding: '8px 16px', fontSize: 13, borderRadius: 8,
+              border: '1px solid #e5e7eb', background: 'white', color: '#374151',
+              cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500
+            }}
+          >
+            Cancelar
+          </button>
+          <button
+            onClick={onConfirmar}
+            disabled={borrando}
+            style={{
+              padding: '8px 18px', fontSize: 13, borderRadius: 8,
+              border: 'none', background: borrando ? '#fca5a5' : '#dc2626',
+              color: 'white', cursor: borrando ? 'not-allowed' : 'pointer',
+              fontFamily: 'inherit', fontWeight: 600
+            }}
+          >
+            {borrando ? 'Borrando…' : 'Sí, borrar datos'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Colores ──────────────────────────────────────────────────────────────────
 
 const HEAT = {
@@ -322,10 +387,12 @@ function exportarPDF(residente, historial, escalas, metricas) {
 // ─── ResidentDashboard ────────────────────────────────────────────────────────
 
 export default function ResidentDashboard() {
-  const { navigateTo, goBack, selectedResidentId } = useApp();
+  const { navigateTo, goBack, selectedResidentId, userRole } = useApp();
   const [escalaAbierta, setEscalaAbierta]   = useState(null);
   const [sesionesReales, setSesionesReales] = useState(null);
   const [escalasReales, setEscalasReales]   = useState(null);
+  const [modalBorrar, setModalBorrar]       = useState(false);
+  const [borrando, setBorrando]             = useState(false);
 
   const residenteId = selectedResidentId || 'r1';
   const residente   = MOCK_RESIDENTS.find(r => r.id === residenteId);
@@ -402,6 +469,17 @@ export default function ResidentDashboard() {
   const tendenciaGaps    = sN && s1 ? (sN.gapsCompletados > s1.gapsCompletados ? '↑' : sN.gapsCompletados < s1.gapsCompletados ? '↓' : '→') : '→';
   const tendenciaMed     = calcTendencia(historial, 'mediaciones', true);
 
+  // ── Borrar datos de un residente (solo director) ──────────────────────────
+  const borrarDatos = async () => {
+    setBorrando(true);
+    await supabase.from('kinact_sesiones').delete().eq('residente_id', residenteId);
+    await supabase.from('kinact_escalas').delete().eq('residente_id', residenteId);
+    setSesionesReales([]);
+    setEscalasReales({});
+    setBorrando(false);
+    setModalBorrar(false);
+  };
+
   const METRICAS = [
     {
       valor: `${asistencia}%`,
@@ -464,6 +542,9 @@ export default function ResidentDashboard() {
           <div style={{ display: 'flex', gap: 8 }}>
             <button onClick={() => exportarPDF(residente, historial, escalas, METRICAS)} style={btnBase('#fef3c7', '#92400e', '#fcd34d')}>Exportar PDF</button>
             <button onClick={() => navigateTo('clinical-scales')} style={btnBase('#dbeafe', '#1d4ed8', '#93c5fd')}>Añadir escala clínica</button>
+            {userRole === 'director' && (
+              <button onClick={() => setModalBorrar(true)} style={btnBase('#fee2e2', '#b91c1c', '#fecaca')}>Borrar datos</button>
+            )}
           </div>
         </div>
 
@@ -668,6 +749,15 @@ export default function ResidentDashboard() {
         </div>
 
       </div>
+
+      {modalBorrar && (
+        <ModalBorrar
+          nombre={residente.nombre}
+          onConfirmar={borrarDatos}
+          onCancelar={() => setModalBorrar(false)}
+          borrando={borrando}
+        />
+      )}
     </div>
   );
 }
