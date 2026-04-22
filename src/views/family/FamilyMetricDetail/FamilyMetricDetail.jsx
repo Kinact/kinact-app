@@ -171,9 +171,9 @@ function getBarraAncho(historial, index, invertido) {
 
 // ─── Component ───────────────────────────────────────────────────────────────
 
-export default function FamilyMetricDetail({ metricaId, residenteNombre = 'María Carmen', onBack }) {
+export default function FamilyMetricDetail({ metricaId, residenteNombre = '', historialData, onBack }) {
   const metrica        = METRICAS[metricaId];
-  const historial      = HISTORIAL_MOCK[metricaId] || [];
+  const historial      = (historialData && historialData.length > 0) ? historialData : (HISTORIAL_MOCK[metricaId] || []);
   const ultimoValor    = historial[historial.length - 1]?.valor;
   const nivelActual    = getNivel(metricaId, ultimoValor);
   const colores        = COLOR_NIVEL[nivelActual];

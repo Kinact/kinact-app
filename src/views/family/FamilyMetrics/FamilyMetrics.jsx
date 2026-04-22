@@ -1,29 +1,95 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
+import { fmtFechaCorta } from '../../../utils/formatters';
 import FamilyMetricDetail from '../FamilyMetricDetail/FamilyMetricDetail';
 
-// ─── Mock data ────────────────────────────────────────────────────────────────
+// ─── Helpers de mapeo ────────────────────────────────────────────────────────
 
-const DATOS_ACTUALES = {
-  turnos:                   { valor: 19,             tendencia: 'mejora' },
-  colaboraciones:           { valor: 5,              tendencia: 'mejora' },
-  autonomia_juego:          { valor: '78%',          tendencia: 'mejora' },
-  estado_animo:             { valor: 'Muy bien',     tendencia: 'mejora' },
-  engagement:               { valor: 'Alto',         tendencia: 'mejora' },
-  autonomia_general:        { valor: 'Autónoma',     tendencia: 'mejora' },
-  memoria:                  { valor: '22/30',        tendencia: 'igual'  },
-  estado_emocional_clinico: { valor: 'Sin síntomas', tendencia: 'mejora' },
-  autonomia_diaria:         { valor: 'Leve ayuda',   tendencia: 'igual'  },
-  movilidad:                { valor: 'Muy bien',     tendencia: 'mejora' },
-};
+const AUTONOMIA_PCT   = { autonomo: 100, parcial: 55, dependiente: 20 };
+const AUTONOMIA_LABEL = { autonomo: 'Autónoma', parcial: 'Parcial', dependiente: 'Dependiente' };
+const ESTADO_LABEL    = { positivo: 'Positivo', neutro: 'Neutro', bajo: 'Bajo' };
+const ENG_LABEL       = { alto: 'Alto', medio: 'Medio', bajo: 'Bajo' };
+const ORDEN_STR       = { bajo: 0, dependiente: 0, neutro: 1, parcial: 1, medio: 1, positivo: 2, alto: 2, autonomo: 2 };
+
+function tendenciaNum(prev, last, invertido = false) {
+  if (prev == null || last == null) return 'igual';
+  const diff = parseFloat(last) - parseFloat(prev);
+  if (diff === 0) return 'igual';
+  return (invertido ? diff < 0 : diff > 0) ? 'mejora' : 'baja';
+}
+
+function tendenciaStr(prev, last) {
+  if (!prev || !last) return 'igual';
+  const diff = (ORDEN_STR[last] ?? 1) - (ORDEN_STR[prev] ?? 1);
+  return diff > 0 ? 'mejora' : diff < 0 ? 'baja' : 'igual';
+}
+
+// Construye DATOS_ACTUALES a partir de datos reales
+function buildDatos(sesiones, escalas) {
+  const last = sesiones[sesiones.length - 1];
+  const prev = sesiones[sesiones.length - 2];
+
+  const mecRows     = escalas?.mec     || [];
+  const gdsRows     = escalas?.gds     || [];
+  const barthelRows = escalas?.barthel || [];
+  const tugRows     = escalas?.tug     || [];
+
+  const mecLast     = mecRows[mecRows.length - 1];
+  const gdsLast     = gdsRows[gdsRows.length - 1];
+  const barthelLast = barthelRows[barthelRows.length - 1];
+  const tugLast     = tugRows[tugRows.length - 1];
+
+  const gdsLabel = gdsLast
+    ? (gdsLast.valor <= 5 ? 'Sin síntomas' : gdsLast.valor <= 10 ? 'Tristeza leve' : 'Tristeza moderada')
+    : 'Sin datos';
+  const barthelLabel = barthelLast
+    ? (barthelLast.valor >= 91 ? 'Independiente' : barthelLast.valor >= 61 ? 'Leve ayuda' : 'Necesita apoyo')
+    : 'Sin datos';
+  const tugLabel = tugLast
+    ? (tugLast.valor <= 12 ? 'Muy bien' : tugLast.valor <= 20 ? 'Precaución' : 'Riesgo caídas')
+    : 'Sin datos';
+
+  return {
+    turnos:                   { valor: last?.gapsCompletados ?? '—',                 tendencia: tendenciaNum(prev?.gapsCompletados, last?.gapsCompletados) },
+    colaboraciones:           { valor: last?.intercambios    ?? '—',                 tendencia: tendenciaNum(prev?.intercambios,    last?.intercambios) },
+    autonomia_juego:          { valor: last ? `${AUTONOMIA_PCT[last.autonomia] ?? 55}%` : '—', tendencia: tendenciaNum(AUTONOMIA_PCT[prev?.autonomia], AUTONOMIA_PCT[last?.autonomia]) },
+    estado_animo:             { valor: last ? (ESTADO_LABEL[last.estado] ?? '—')    : '—',     tendencia: tendenciaStr(prev?.estado,      last?.estado) },
+    engagement:               { valor: last ? (ENG_LABEL[last.engagement] ?? '—')  : '—',     tendencia: tendenciaStr(prev?.engagement,  last?.engagement) },
+    autonomia_general:        { valor: last ? (AUTONOMIA_LABEL[last.autonomia] ?? '—') : '—', tendencia: tendenciaStr(prev?.autonomia,   last?.autonomia) },
+    memoria:                  { valor: mecLast     ? `${mecLast.valor}/30`           : 'Sin datos', tendencia: tendenciaNum(mecRows[mecRows.length - 2]?.valor,     mecLast?.valor) },
+    estado_emocional_clinico: { valor: gdsLabel,                                                    tendencia: tendenciaNum(gdsRows[gdsRows.length - 2]?.valor,     gdsLast?.valor, true) },
+    autonomia_diaria:         { valor: barthelLabel,                                               tendencia: tendenciaNum(barthelRows[barthelRows.length - 2]?.valor, barthelLast?.valor) },
+    movilidad:                { valor: tugLabel,                                                    tendencia: tendenciaNum(tugRows[tugRows.length - 2]?.valor,      tugLast?.valor, true) }
+  };
+}
+
+// Construye el historial por métrica para FamilyMetricDetail
+function buildHistorialPorMetrica(sesiones, escalas) {
+  const ultimas = sesiones.slice(-7); // hasta 7 sesiones en el gráfico
+
+  return {
+    turnos:            ultimas.map(s => ({ fecha: fmtFechaCorta(s.fecha), valor: s.gapsCompletados })),
+    colaboraciones:    ultimas.map(s => ({ fecha: fmtFechaCorta(s.fecha), valor: s.intercambios })),
+    autonomia_juego:   ultimas.map(s => ({ fecha: fmtFechaCorta(s.fecha), valor: AUTONOMIA_PCT[s.autonomia] ?? 55 })),
+    estado_animo:      ultimas.map(s => ({ fecha: fmtFechaCorta(s.fecha), valor: ESTADO_LABEL[s.estado] ?? 'Neutro' })),
+    engagement:        ultimas.map(s => ({ fecha: fmtFechaCorta(s.fecha), valor: ENG_LABEL[s.engagement] ?? 'Medio' })),
+    autonomia_general: ultimas.map(s => ({ fecha: fmtFechaCorta(s.fecha), valor: AUTONOMIA_LABEL[s.autonomia] ?? 'Parcial' })),
+    memoria:           (escalas?.mec     || []).map(m => ({ fecha: fmtFechaCorta(m.fecha), valor: m.valor })),
+    estado_emocional_clinico: (escalas?.gds || []).map(g => ({ fecha: fmtFechaCorta(g.fecha), valor: g.valor })),
+    autonomia_diaria:  (escalas?.barthel || []).map(b => ({ fecha: fmtFechaCorta(b.fecha), valor: b.valor })),
+    movilidad:         (escalas?.tug     || []).map(t => ({ fecha: fmtFechaCorta(t.fecha), valor: t.valor }))
+  };
+}
+
+// ─── Bloques de métricas ─────────────────────────────────────────────────────
 
 const BLOQUES = [
   {
     id: 'juego',
     titulo: 'Durante el juego',
     metricas: [
-      { id: 'turnos',          titulo: 'Turnos completados',          subtitulo: 'Participación activa en la sesión' },
-      { id: 'colaboraciones',  titulo: 'Colaboraciones con el grupo', subtitulo: 'Intercambios realizados esta sesión' },
-      { id: 'autonomia_juego', titulo: 'Decisiones por su cuenta',    subtitulo: 'Sin necesitar ayuda del equipo' }
+      { id: 'turnos',          titulo: 'Piezas colocadas',              subtitulo: 'Participación activa en la sesión' },
+      { id: 'colaboraciones',  titulo: 'Colaboraciones con el grupo',   subtitulo: 'Intercambios realizados esta sesión' },
+      { id: 'autonomia_juego', titulo: 'Decisiones por su cuenta',      subtitulo: 'Sin necesitar ayuda del equipo' }
     ]
   },
   {
@@ -40,15 +106,13 @@ const BLOQUES = [
     titulo: 'Evaluaciones del equipo clínico',
     subtituloBloq: 'Realizadas periódicamente por los profesionales del centro',
     metricas: [
-      { id: 'memoria',                  titulo: 'Memoria y atención',          subtitulo: 'Última revisión: enero 2026' },
-      { id: 'estado_emocional_clinico', titulo: 'Estado emocional clínico',    subtitulo: 'Última revisión: enero 2026' },
-      { id: 'autonomia_diaria',         titulo: 'Autonomía en el día a día',   subtitulo: 'Última revisión: enero 2026' },
-      { id: 'movilidad',                titulo: 'Movilidad y equilibrio',      subtitulo: 'Última medición: abril 2026' }
+      { id: 'memoria',                  titulo: 'Memoria y atención',       subtitulo: 'Test cognitivo (MEC)' },
+      { id: 'estado_emocional_clinico', titulo: 'Estado emocional clínico', subtitulo: 'Escala GDS-15' },
+      { id: 'autonomia_diaria',         titulo: 'Autonomía en el día a día', subtitulo: 'Escala de Barthel' },
+      { id: 'movilidad',                titulo: 'Movilidad y equilibrio',   subtitulo: 'Test TUG (segundos)' }
     ]
   }
 ];
-
-// ─── Helpers ─────────────────────────────────────────────────────────────────
 
 const TENDENCIA_LABEL = { mejora: '↑ mejora', igual: '→ estable', baja: '↓ descenso' };
 const TENDENCIA_COLOR = { mejora: '#16a34a', igual: '#6b7280', baja: '#dc2626' };
@@ -59,15 +123,18 @@ function getColorValor(tendencia) {
 
 // ─── Component ───────────────────────────────────────────────────────────────
 
-export default function FamilyMetrics({ residenteNombre = 'María Carmen', onBack }) {
+export default function FamilyMetrics({ residenteNombre = '', historialSesiones = [], escalas = {}, onBack }) {
   const [metricaDetalle, setMetricaDetalle] = useState(null);
 
-  // Navegación interna a detalle
+  const datos = useMemo(() => buildDatos(historialSesiones, escalas), [historialSesiones, escalas]);
+  const historialPorMetrica = useMemo(() => buildHistorialPorMetrica(historialSesiones, escalas), [historialSesiones, escalas]);
+
   if (metricaDetalle !== null) {
     return (
       <FamilyMetricDetail
         metricaId={metricaDetalle}
         residenteNombre={residenteNombre}
+        historialData={historialPorMetrica[metricaDetalle]}
         onBack={() => setMetricaDetalle(null)}
       />
     );
@@ -117,7 +184,7 @@ export default function FamilyMetrics({ residenteNombre = 'María Carmen', onBac
           )}
 
           {bloque.metricas.map((metrica, index) => {
-            const dato    = DATOS_ACTUALES[metrica.id];
+            const dato    = datos[metrica.id];
             const esUltimo = index === bloque.metricas.length - 1;
             return (
               <div
@@ -129,20 +196,17 @@ export default function FamilyMetrics({ residenteNombre = 'María Carmen', onBac
                   borderBottom: esUltimo ? 'none' : '0.5px solid #f3f4f6'
                 }}
               >
-                {/* Izquierda */}
                 <div>
                   <div style={{ fontSize: 13, color: '#111827' }}>{metrica.titulo}</div>
                   <div style={{ fontSize: 11, color: '#6b7280', marginTop: 1 }}>{metrica.subtitulo}</div>
                 </div>
-
-                {/* Derecha */}
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
                   <div style={{ textAlign: 'right' }}>
-                    <div style={{ fontSize: 14, fontWeight: 500, color: getColorValor(dato.tendencia) }}>
-                      {dato.valor}
+                    <div style={{ fontSize: 14, fontWeight: 500, color: getColorValor(dato?.tendencia) }}>
+                      {dato?.valor ?? '—'}
                     </div>
-                    <div style={{ fontSize: 10, color: TENDENCIA_COLOR[dato.tendencia], marginTop: 1 }}>
-                      {TENDENCIA_LABEL[dato.tendencia]}
+                    <div style={{ fontSize: 10, color: TENDENCIA_COLOR[dato?.tendencia] || '#6b7280', marginTop: 1 }}>
+                      {TENDENCIA_LABEL[dato?.tendencia] || '→ estable'}
                     </div>
                   </div>
                   <span style={{ fontSize: 14, color: '#d1d5db' }}>›</span>

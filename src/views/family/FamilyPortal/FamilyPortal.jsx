@@ -1,15 +1,16 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useApp } from '../../../context/AppContext';
 import { MOCK_RESIDENTS, MOCK_SESSION_HISTORY, MOCK_ESCALAS } from '../../../data/mockData';
 import { fmtFechaCorta as fmtCorta, fmtFechaLarga as fmtLarga } from '../../../utils/formatters';
+import { supabase } from '../../../lib/supabase';
 import FamilyMetrics from '../FamilyMetrics/FamilyMetrics';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-function traducirEstado(v)   { return { bajo: 'Difícil', neutro: 'Regular', positivo: 'Bien' }[v] || 'Bien'; }
-function colorEstado(v)      { return { bajo: '#ef4444', neutro: '#f59e0b', positivo: '#16a34a' }[v] || '#16a34a'; }
-function bgEstado(v)         { return { bajo: '#fee2e2', neutro: '#fef3c7', positivo: '#dcfce7' }[v] || '#dcfce7'; }
-function traducirAutonomia(v){ return { dependiente: 'Con mucho apoyo', parcial: 'Con algo de ayuda', autonomo: 'Por su cuenta' }[v] || ''; }
+function traducirEstado(v)    { return { bajo: 'Difícil', neutro: 'Regular', positivo: 'Bien' }[v] || 'Bien'; }
+function colorEstado(v)       { return { bajo: '#ef4444', neutro: '#f59e0b', positivo: '#16a34a' }[v] || '#16a34a'; }
+function bgEstado(v)          { return { bajo: '#fee2e2', neutro: '#fef3c7', positivo: '#dcfce7' }[v] || '#dcfce7'; }
+function traducirAutonomia(v) { return { dependiente: 'Con mucho apoyo', parcial: 'Con algo de ayuda', autonomo: 'Por su cuenta' }[v] || ''; }
 
 function generarMensajeCalido(sesion, nombre) {
   const primerNombre = nombre.split(' ')[0];
@@ -30,30 +31,102 @@ function generarMensajeCalido(sesion, nombre) {
 
 const BARRA_ANCHO = { bajo: '40%', neutro: '70%', positivo: '100%' };
 
+// Próxima sesión: siguiente martes
+function proximoMartes() {
+  const hoy = new Date();
+  const dia  = hoy.getDay(); // 0=dom, 2=mar
+  const diff = (2 - dia + 7) % 7 || 7;
+  const fecha = new Date(hoy);
+  fecha.setDate(hoy.getDate() + diff);
+  return fecha.toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long' });
+}
+
 // ─── FamilyPortal ─────────────────────────────────────────────────────────────
 
 export default function FamilyPortal() {
   const { selectedResidentId, logout } = useApp();
-  const [abierto,       setAbierto]      = useState(false);
-  const [vistaActual,   setVistaActual]  = useState('portal');
+  const [abierto,     setAbierto]     = useState(false);
+  const [vistaActual, setVistaActual] = useState('portal');
 
-  const residenteId  = selectedResidentId || 'r1';
-  const residente    = MOCK_RESIDENTS.find(r => r.id === residenteId);
-  const historial    = MOCK_SESSION_HISTORY[residenteId] || [];
-  const escalas      = MOCK_ESCALAS[residenteId] || {};
-  const ultimaSesion = historial[historial.length - 1];
+  const residenteId = selectedResidentId || 'r1';
+  const residente   = MOCK_RESIDENTS.find(r => r.id === residenteId);
 
-  // Navegación a métricas (FamilyMetrics gestiona su propio detalle internamente)
+  // ── Datos desde Supabase ─────────────────────────────────────────────────
+  const [historialSesiones, setHistorialSesiones] = useState(null);
+  const [escalas,           setEscalas]           = useState(null);
+
+  useEffect(() => {
+    setHistorialSesiones(null);
+    setEscalas(null);
+
+    // Sesiones
+    supabase
+      .from('kinact_sesiones')
+      .select('residente_id, fecha, sesion_num, gaps_completados, intercambios, mediaciones, estado, engagement, autonomia, agitacion, fatiga')
+      .eq('residente_id', residenteId)
+      .order('fecha', { ascending: true })
+      .then(({ data }) => {
+        if (data && data.length > 0) {
+          // Normalizar campo: la API devuelve gaps_completados, los mocks usan gapsCompletados
+          setHistorialSesiones(data.map(s => ({
+            sesion:          s.sesion_num,
+            fecha:           s.fecha,
+            gapsCompletados: s.gaps_completados,
+            intercambios:    s.intercambios,
+            mediaciones:     s.mediaciones,
+            estado:          s.estado,
+            engagement:      s.engagement,
+            autonomia:       s.autonomia,
+            agitacion:       s.agitacion,
+            fatiga:          s.fatiga
+          })));
+        } else {
+          setHistorialSesiones(MOCK_SESSION_HISTORY[residenteId] || []);
+        }
+      });
+
+    // Escalas clínicas
+    supabase
+      .from('kinact_escalas')
+      .select('residente_id, fecha, mec, gds, barthel, tug')
+      .eq('residente_id', residenteId)
+      .order('fecha', { ascending: true })
+      .then(({ data }) => {
+        if (data && data.length > 0) {
+          const result = { mec: [], gds: [], barthel: [], tug: [] };
+          data.forEach(row => {
+            if (row.mec     != null) result.mec.push({     fecha: row.fecha, valor: row.mec });
+            if (row.gds     != null) result.gds.push({     fecha: row.fecha, valor: row.gds });
+            if (row.barthel != null) result.barthel.push({ fecha: row.fecha, valor: row.barthel });
+            if (row.tug     != null) result.tug.push({     fecha: row.fecha, valor: row.tug });
+          });
+          setEscalas(result);
+        } else {
+          setEscalas(MOCK_ESCALAS[residenteId] || {});
+        }
+      });
+  }, [residenteId]);
+
+  // ── Datos efectivos (mientras carga usa mock como base) ──────────────────
+  const historial   = historialSesiones ?? (MOCK_SESSION_HISTORY[residenteId] || []);
+  const escalasDatos = escalas          ?? (MOCK_ESCALAS[residenteId] || {});
+
+  const ultimaSesion         = historial[historial.length - 1];
+  const ultimaSesionAnterior = historial[historial.length - 2];
+
+  // Navegación a métricas
   if (vistaActual === 'metricas') {
     return (
       <FamilyMetrics
-        residenteNombre={residente?.nombre || 'María Carmen'}
+        residenteNombre={residente?.nombre || ''}
+        historialSesiones={historial}
+        escalas={escalasDatos}
         onBack={() => setVistaActual('portal')}
       />
     );
   }
 
-  // Guard: si no hay datos todavía
+  // Guard: sin datos
   if (!residente || !ultimaSesion) {
     return (
       <div style={{ background: '#1a1a1a', minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -62,30 +135,26 @@ export default function FamilyPortal() {
     );
   }
 
-  const tug_actual   = escalas.tug?.[escalas.tug.length - 1]?.valor ?? null;
-  const tug_anterior = escalas.tug?.[escalas.tug.length - 2]?.valor ?? null;
-  const gds_actual   = escalas.gds?.[escalas.gds.length - 1]?.valor ?? null;
+  const tug_actual   = escalasDatos.tug?.[escalasDatos.tug.length - 1]?.valor ?? null;
+  const tug_anterior = escalasDatos.tug?.[escalasDatos.tug.length - 2]?.valor ?? null;
 
-  // Guard: comparación segura de TUG
-  const tugTend = (tug_actual !== null && tug_anterior !== null)
+  const tugTend  = (tug_actual !== null && tug_anterior !== null)
     ? (tug_actual < tug_anterior ? '↑ mejorando' : tug_actual > tug_anterior ? '↓ empeorando' : '→ estable')
     : '→ estable';
   const tugColor = tugTend.startsWith('↑') ? '#16a34a' : tugTend.startsWith('↓') ? '#ef4444' : '#6b7280';
 
-  const ultimaSesionAnterior = historial[historial.length - 2];
   const estadoTend = ultimaSesionAnterior
     ? ultimaSesion.estado === ultimaSesionAnterior.estado ? '→' : (
         { bajo: 0, neutro: 1, positivo: 2 }[ultimaSesion.estado] >
         { bajo: 0, neutro: 1, positivo: 2 }[ultimaSesionAnterior.estado] ? '↑' : '↓'
       )
     : '→';
-  const primerasSesion = historial[0];
-  const intercambiosTend = ultimaSesion.intercambios > (primerasSesion?.intercambios || 0) ? '↑ más que al inicio' : '→ similar al inicio';
 
-  const estadoLabel = { bajo: 'Necesita apoyo', neutro: 'Estable', positivo: 'Muy positivo' }[ultimaSesion.estado] || 'Estable';
-  const tableroColor = ultimaSesion.gapsCompletados === 9 ? 'positivo' : 'neutro';
-
-  const borderColor = colorEstado(ultimaSesion.estado) + '40'; // hex alpha ~25%
+  const primerasSesion      = historial[0];
+  const intercambiosTend    = ultimaSesion.intercambios > (primerasSesion?.intercambios || 0) ? '↑ más que al inicio' : '→ similar al inicio';
+  const estadoLabel         = { bajo: 'Necesita apoyo', neutro: 'Estable', positivo: 'Muy positivo' }[ultimaSesion.estado] || 'Estable';
+  const tableroColor        = ultimaSesion.gapsCompletados === 9 ? 'positivo' : 'neutro';
+  const borderColor         = colorEstado(ultimaSesion.estado) + '40';
 
   return (
     <div style={{ background: '#1a1a1a', minHeight: '100vh', display: 'flex', justifyContent: 'center', padding: 16 }}>
@@ -190,8 +259,7 @@ export default function FamilyPortal() {
                 <div style={{ flex: 1, height: 8, borderRadius: 4, background: '#f3f4f6', overflow: 'hidden' }}>
                   <div style={{
                     width: BARRA_ANCHO[h.estado] || '70%',
-                    height: '100%',
-                    borderRadius: 4,
+                    height: '100%', borderRadius: 4,
                     background: colorEstado(h.estado),
                     transition: 'width 0.3s'
                   }} />
@@ -299,7 +367,9 @@ export default function FamilyPortal() {
         }}>
           <div>
             <div style={{ fontSize: 12, fontWeight: 600, color: '#374151' }}>Próxima sesión</div>
-            <div style={{ fontSize: 12, color: '#6b7280', marginTop: 2 }}>Miércoles 16 de abril · 11:00h</div>
+            <div style={{ fontSize: 12, color: '#6b7280', marginTop: 2 }}>
+              {proximoMartes()} · 11:00h
+            </div>
           </div>
           <button style={{
             height: 36, padding: '6px 14px', fontSize: 12,
@@ -311,7 +381,7 @@ export default function FamilyPortal() {
           </button>
         </div>
 
-        {/* ── Volver ── */}
+        {/* ── Salir ── */}
         <button
           onClick={logout}
           style={{
