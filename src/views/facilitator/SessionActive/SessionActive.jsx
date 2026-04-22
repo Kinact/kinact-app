@@ -250,7 +250,7 @@ function PlayerBlock({
           <summary style={{ cursor: 'pointer' }}>Ver intercambios ({jugador.intercambios.length})</summary>
           {jugador.intercambios.map((ic, idx) => (
             <div key={idx} style={{ paddingLeft: 8, marginTop: 2 }}>
-              T{ic.turno}: dio {ic.piezaDada.forma.split('-')[0]} → recibió {ic.piezaRecibida.forma.split('-')[0]}
+              T{ic.turno ?? '?'}: dio {ic.piezaDada?.forma?.split('-')[0] ?? '?'} → recibió {ic.piezaRecibida?.forma?.split('-')[0] ?? '?'}
             </div>
           ))}
         </details>

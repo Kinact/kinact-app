@@ -392,7 +392,8 @@ export default function ResidentDashboard() {
   const coloresTablero = TABLERO_COLORS[residente.tableroHabitual] || TABLERO_COLORS.casa;
 
   // ── Cálculos de métricas ──
-  const asistencia       = historial.length > 0 ? Math.round((historial.length / 13) * 100) : 0;
+  const SESIONES_PROGRAMA = 10; // programa de 10 sesiones semanales
+  const asistencia       = historial.length > 0 ? Math.round((historial.length / SESIONES_PROGRAMA) * 100) : 0;
   const gapsMedia        = historial.length > 0 ? (historial.reduce((s, h) => s + h.gapsCompletados, 0) / historial.length).toFixed(1) : '0';
   const intercambiosMedia= historial.length > 0 ? (historial.reduce((s, h) => s + h.intercambios, 0) / historial.length).toFixed(1) : '0';
   const mediacionesMedia = historial.length > 0 ? (historial.reduce((s, h) => s + h.mediaciones, 0) / historial.length).toFixed(1) : '0';

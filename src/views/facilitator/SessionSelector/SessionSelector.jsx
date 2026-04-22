@@ -4,39 +4,49 @@ import { MOCK_RESIDENTS } from '../../../data/mockData';
 
 // ─── Mock data ────────────────────────────────────────────────────────────────
 
-const FACILITADOR = { nombre: 'Ana López', residencia: 'Residencia Santa Clara' };
+// Grupo A: altas prestaciones · Grupo B: mayor soporte
+const GRUPO_A_IDS = ['r1', 'r3', 'r5', 'r7']; // Rosa, Dolores, Concha, Pilar
+const GRUPO_B_IDS = ['r2', 'r4', 'r6', 'r8']; // Paco, Tomás, Emilio, Bernardo
+
+function primerNombre(id) {
+  return MOCK_RESIDENTS.find(r => r.id === id)?.nombre.split(' ')[0] || id;
+}
 
 const SESIONES_PROGRAMADAS = [
-  { id: 'sp1', nombre: 'Grupo B', hora: 'HOY · 10:30h', esHoy: true,
-    jugadores: ['Rosa Martínez','Pedro Sanz','Amparo Gil','Luis Fernández'],
-    tableros: ['casa','barco','flor','cafe'] },
-  { id: 'sp2', nombre: 'Grupo A', hora: 'MIÉ 16 · 11:00h', esHoy: false,
-    jugadores: ['María Carmen','Manuel García','Carmen Ruiz','Antonio Vega'],
-    tableros: ['casa','barco','flor','cafe'] },
-  { id: 'sp3', nombre: 'Grupo C', hora: 'JUE 17 · 10:00h', esHoy: false,
-    jugadores: ['Luisa Pérez','José Molina','Dolores Ruiz','Paco García'],
-    tableros: ['casa','barco','flor','cafe'] },
-  { id: 'sp4', nombre: 'Grupo B', hora: 'VIE 18 · 11:00h', esHoy: false,
-    jugadores: ['Rosa Martínez','Pedro Sanz','Amparo Gil','Luis Fernández'],
-    tableros: ['casa','barco','flor','cafe'] },
+  { id: 'sp1', nombre: 'Grupo A', hora: 'HOY · 11:00h', esHoy: true,
+    jugadores: GRUPO_A_IDS.map(primerNombre),
+    residenteIds: GRUPO_A_IDS,
+    tableros: GRUPO_A_IDS.map(id => MOCK_RESIDENTS.find(r => r.id === id)?.tableroHabitual || 'casa') },
+  { id: 'sp2', nombre: 'Grupo B', hora: 'LUN 27 · 10:30h', esHoy: false,
+    jugadores: GRUPO_B_IDS.map(primerNombre),
+    residenteIds: GRUPO_B_IDS,
+    tableros: GRUPO_B_IDS.map(id => MOCK_RESIDENTS.find(r => r.id === id)?.tableroHabitual || 'casa') },
+  { id: 'sp3', nombre: 'Grupo A', hora: 'MAR 28 · 11:00h', esHoy: false,
+    jugadores: GRUPO_A_IDS.map(primerNombre),
+    residenteIds: GRUPO_A_IDS,
+    tableros: GRUPO_A_IDS.map(id => MOCK_RESIDENTS.find(r => r.id === id)?.tableroHabitual || 'casa') },
+  { id: 'sp4', nombre: 'Grupo B', hora: 'MIÉ 29 · 10:30h', esHoy: false,
+    jugadores: GRUPO_B_IDS.map(primerNombre),
+    residenteIds: GRUPO_B_IDS,
+    tableros: GRUPO_B_IDS.map(id => MOCK_RESIDENTS.find(r => r.id === id)?.tableroHabitual || 'casa') },
 ];
 
 const SESIONES_RECIENTES = [
-  { id: 'sr1', nombre: 'Grupo A', fecha: 'Lunes 14 abr', duracion: '25 min',
-    jugadores: ['María C','Manuel G','Carmen R','Antonio V'],
-    residenteIds: ['r1','r2','r3','r4'], estado: 'completada' },
-  { id: 'sr2', nombre: 'Grupo B', fecha: 'Miércoles 9 abr', duracion: '22 min',
-    jugadores: ['Rosa M','Pedro S','Amparo G','Luis F'],
-    residenteIds: ['r1','r2','r3','r4'], estado: 'completada' },
-  { id: 'sr3', nombre: 'Grupo A', fecha: 'Viernes 4 abr', duracion: '25 min',
-    jugadores: ['María C','Manuel G','Carmen R','Antonio V'],
-    residenteIds: ['r1','r2','r3','r4'], estado: 'completada' },
-  { id: 'sr4', nombre: 'Grupo C', fecha: 'Martes 1 abr', duracion: '20 min',
-    jugadores: ['Luisa P','José M','Dolores R','Paco G'],
-    residenteIds: ['r1','r2','r3','r4'], estado: 'completada' },
-  { id: 'sr5', nombre: 'Grupo B', fecha: 'Jueves 27 mar', duracion: '25 min',
-    jugadores: ['Rosa M','Pedro S','Amparo G','Luis F'],
-    residenteIds: ['r1','r2','r3','r4'], estado: 'completada' },
+  { id: 'sr1', nombre: 'Grupo A', fecha: '7 abr', duracion: '25 min',
+    jugadores: GRUPO_A_IDS.map(primerNombre),
+    residenteIds: GRUPO_A_IDS, estado: 'completada' },
+  { id: 'sr2', nombre: 'Grupo B', fecha: '7 abr', duracion: '23 min',
+    jugadores: GRUPO_B_IDS.map(primerNombre),
+    residenteIds: GRUPO_B_IDS, estado: 'completada' },
+  { id: 'sr3', nombre: 'Grupo A', fecha: '31 mar', duracion: '26 min',
+    jugadores: GRUPO_A_IDS.map(primerNombre),
+    residenteIds: GRUPO_A_IDS, estado: 'completada' },
+  { id: 'sr4', nombre: 'Grupo B', fecha: '31 mar', duracion: '22 min',
+    jugadores: GRUPO_B_IDS.map(primerNombre),
+    residenteIds: GRUPO_B_IDS, estado: 'completada' },
+  { id: 'sr5', nombre: 'Grupo A', fecha: '24 mar', duracion: '25 min',
+    jugadores: GRUPO_A_IDS.map(primerNombre),
+    residenteIds: GRUPO_A_IDS, estado: 'completada' },
 ];
 
 const TABLEROS = ['casa','barco','flor','cafe'];
@@ -58,7 +68,8 @@ function capitalize(str) {
 // ─── Componente ───────────────────────────────────────────────────────────────
 
 export default function SessionSelector({ onIniciarSesion, onVerResidentes }) {
-  const { logout } = useApp();
+  const { logout, profile, user } = useApp();
+  const nombreFacilitador = profile?.nombre || user?.email?.split('@')[0] || 'Facilitadora';
 
   const [historialExpandido, setHistorialExpandido]     = useState(false);
   const [nuevaPartidaExpandida, setNuevaPartidaExpandida] = useState(true);
@@ -99,10 +110,10 @@ export default function SessionSelector({ onIniciarSesion, onVerResidentes }) {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
         <div>
           <div style={{ fontSize: 18, fontWeight: 500, color: 'white' }}>
-            Facilitadora: {FACILITADOR.nombre}
+            Facilitadora: {nombreFacilitador}
           </div>
           <div style={{ fontSize: 12, color: '#6b7280', marginTop: 3 }}>
-            {FACILITADOR.residencia} · {fechaHoy}
+            Residencia Santa Clara · {fechaHoy}
           </div>
         </div>
         <button onClick={logout} style={btn('#transparent', '#4b5563', '0.5px solid #374151')}>
@@ -279,7 +290,10 @@ export default function SessionSelector({ onIniciarSesion, onVerResidentes }) {
                 </div>
               </div>
               <button
-                onClick={() => onIniciarSesion(resolverJugadores(sesion.jugadores), sesion.tableros)}
+                onClick={() => onIniciarSesion(
+                sesion.residenteIds.map(id => MOCK_RESIDENTS.find(r => r.id === id)).filter(Boolean),
+                sesion.tableros
+              )}
                 style={btn('#2563eb', 'white', 'none', true)}
               >
                 Iniciar
