@@ -36,6 +36,7 @@ export function AppProvider({ children }) {
     pool: [...POOL_PIEZAS]
   });
 
+  const [orgId, setOrgId] = useState(null);
   const [evaluaciones, setEvaluaciones] = useState([]);
   const [selectedResidentId, setSelectedResidentId] = useState('r1');
 
@@ -50,7 +51,7 @@ export function AppProvider({ children }) {
     if (data && !error) {
       setProfile(data);
       setUserRole(data.rol);
-      // Familiares: enlazar automáticamente con su residente
+      setOrgId(data.org_id || null);
       if (data.rol === 'familiar' && data.residente_id) {
         setSelectedResidentId(data.residente_id);
       }
@@ -77,7 +78,8 @@ export function AppProvider({ children }) {
           setUser(null);
           setProfile(null);
           setUserRole(null);
-          setCurrentView('login');
+          setOrgId(null);
+          setCurrentView('landing');
         }
       }
     );
@@ -137,6 +139,7 @@ export function AppProvider({ children }) {
     <AppContext.Provider value={{
       user, profile,
       userRole, setUserRole,
+      orgId,
       authLoading,
       currentView, setCurrentView,
       navigateTo, goBack, login, logout,
