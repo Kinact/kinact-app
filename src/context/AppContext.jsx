@@ -50,6 +50,10 @@ export function AppProvider({ children }) {
     if (data && !error) {
       setProfile(data);
       setUserRole(data.rol);
+      // Familiares: enlazar automáticamente con su residente
+      if (data.rol === 'familiar' && data.residente_id) {
+        setSelectedResidentId(data.residente_id);
+      }
       setCurrentView(VISTA_POR_ROL[data.rol] || 'center');
     }
   };

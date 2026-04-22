@@ -3,6 +3,7 @@ import { jsPDF } from 'jspdf';
 import { useApp } from '../../../context/AppContext';
 import { supabase } from '../../../lib/supabase';
 import { TABLERO_COLORS_DARK } from '../../../constants/tableros';
+import { MOCK_RESIDENTS } from '../../../data/mockData';
 
 const CENTRO_ID = '00000000-0000-0000-0000-000000000001';
 
@@ -422,50 +423,78 @@ function TabFacilitadores() {
 
 // ─── Pestaña: Familiares ──────────────────────────────────────────────────────
 
-const FAMILIARES_INICIAL = [
-  { id: 'fam1', nombre: 'Rosa García', email: 'rosa.garcia@email.com', residenteId: '00000000-0000-0001-0000-000000000002', activo: true },
-  { id: 'fam2', nombre: 'Pilar Ruiz',  email: 'pilar.ruiz@email.com',  residenteId: '00000000-0000-0001-0000-000000000003', activo: true },
-];
-
 function TabFamiliares() {
-  const [familiares,   setFamiliares]   = useState(FAMILIARES_INICIAL);
-  const [residentes,   setResidentes]   = useState([]);
+  const [familiares,   setFamiliares]   = useState([]);
+  const [cargando,     setCargando]     = useState(true);
   const [formAbierto,  setFormAbierto]  = useState(false);
+  const [guardando,    setGuardando]    = useState(false);
   const [credenciales, setCredenciales] = useState(null);
   const [mostrarPass,  setMostrarPass]  = useState(false);
-  const [form, setForm] = useState({ nombre: '', email: '', password: '', residenteId: '' });
+  const [form, setForm] = useState({
+    nombre: '', email: '', password: '',
+    residenteId: MOCK_RESIDENTS[0]?.id || 'r1'
+  });
 
-  useEffect(() => {
-    supabase.from('residentes').select('id,nombre').eq('centro_id', CENTRO_ID).then(({ data }) => {
-      if (data) { setResidentes(data); setForm(f => ({ ...f, residenteId: data[0]?.id || '' })); }
-    });
-  }, []);
+  const cargar = async () => {
+    setCargando(true);
+    const { data } = await supabase
+      .from('kinact_familiares')
+      .select('*')
+      .order('created_at', { ascending: false });
+    setFamiliares(data || []);
+    setCargando(false);
+  };
+
+  useEffect(() => { cargar(); }, []);
 
   const set = (k, v) => setForm(prev => ({ ...prev, [k]: v }));
   const generar = () => set('password', generarPassword());
 
-  const guardar = () => {
+  const guardar = async () => {
     if (!form.nombre.trim() || !form.email.trim() || !form.residenteId || form.password.length < 8) return;
-    setFamiliares(prev => [...prev, { id: 'fam' + Date.now(), nombre: form.nombre.trim(), email: form.email.trim(), residenteId: form.residenteId, activo: true }]);
-    setCredenciales({ email: form.email.trim(), password: form.password });
-    setForm(f => ({ ...f, nombre: '', email: '', password: '' }));
-    setFormAbierto(false);
-    setMostrarPass(false);
+    setGuardando(true);
+    const { error } = await supabase.from('kinact_familiares').insert({
+      nombre:       form.nombre.trim(),
+      email:        form.email.trim(),
+      residente_id: form.residenteId,
+      activo:       true
+    });
+    if (!error) {
+      setCredenciales({ email: form.email.trim(), password: form.password, residenteId: form.residenteId });
+      setForm(f => ({ ...f, nombre: '', email: '', password: '' }));
+      setFormAbierto(false);
+      setMostrarPass(false);
+      cargar();
+    }
+    setGuardando(false);
   };
 
-  const revocar = (id) => setFamiliares(prev => prev.map(f => f.id === id ? { ...f, activo: false } : f));
-  const nombreResidente = (rid) => residentes.find(r => r.id === rid)?.nombre || '—';
+  const revocar = async (id) => {
+    await supabase.from('kinact_familiares').update({ activo: false }).eq('id', id);
+    cargar();
+  };
+
+  const nombreResidente = (rid) => MOCK_RESIDENTS.find(r => r.id === rid)?.nombre || rid;
 
   return (
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-        <div style={{ fontSize: 13, color: '#6b7280' }}>{familiares.filter(f => f.activo).length} acceso{familiares.filter(f => f.activo).length !== 1 ? 's activos' : ' activo'}</div>
+        <div style={{ fontSize: 13, color: '#6b7280' }}>
+          {cargando ? 'Cargando…' : `${familiares.filter(f => f.activo).length} acceso${familiares.filter(f => f.activo).length !== 1 ? 's activos' : ' activo'}`}
+        </div>
         <button onClick={() => { setFormAbierto(v => !v); setCredenciales(null); }} style={btnBase('#dbeafe', '#1d4ed8', '#93c5fd')}>
           {formAbierto ? '✕ Cancelar' : '+ Dar acceso a familiar'}
         </button>
       </div>
 
-      {credenciales && <CredencialesBox email={credenciales.email} password={credenciales.password} />}
+      {credenciales && (
+        <>
+          <CredencialesBox email={credenciales.email} password={credenciales.password} />
+          <div style={{ background: '#fef3c7', border: '1px solid #fcd34d', borderRadius: 6, padding: '8px 12px', marginTop: 8, fontSize: 12, color: '#92400e' }}>
+            <strong>Paso final:</strong> Crea la cuenta en <strong>Supabase → Authentication → Add user</strong> con ese email y contraseña. Luego actualiza su perfil: <code>UPDATE profiles SET residente_id = '{credenciales.residenteId}', rol = 'familiar' WHERE email = '{credenciales.email}';</code>
+          </div>
+        </>
+      )}
 
       {formAbierto && (
         <div style={{ background: '#f9fafb', border: '1px solid #e5e7eb', borderRadius: 8, padding: 16, marginBottom: 14, marginTop: 10 }}>
@@ -476,7 +505,7 @@ function TabFamiliares() {
             {fieldWrap(<>
               <label style={labelStyle()}>Residente vinculado *</label>
               <select style={inputStyle()} value={form.residenteId} onChange={e => set('residenteId', e.target.value)}>
-                {residentes.map(r => <option key={r.id} value={r.id}>{r.nombre}</option>)}
+                {MOCK_RESIDENTS.map(r => <option key={r.id} value={r.id}>{r.nombre}</option>)}
               </select>
             </>)}
             {fieldWrap(<div>
@@ -494,13 +523,19 @@ function TabFamiliares() {
           </div>
           <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 4 }}>
             <button onClick={() => setFormAbierto(false)} style={btnBase()}>Cancelar</button>
-            <button onClick={guardar} style={btnBase('#dbeafe', '#1d4ed8', '#93c5fd')}>Crear acceso</button>
+            <button onClick={guardar} disabled={guardando} style={btnBase('#dbeafe', '#1d4ed8', '#93c5fd')}>
+              {guardando ? 'Guardando…' : 'Registrar acceso'}
+            </button>
           </div>
         </div>
       )}
 
       <div style={{ background: 'white', border: '1px solid #e5e7eb', borderRadius: 10, overflow: 'hidden' }}>
-        {familiares.map((f, i) => (
+        {cargando ? (
+          <div style={{ padding: 24, textAlign: 'center', color: '#9ca3af', fontSize: 13 }}>Cargando accesos…</div>
+        ) : familiares.length === 0 ? (
+          <div style={{ padding: 24, textAlign: 'center', color: '#9ca3af', fontSize: 13 }}>No hay accesos de familiares registrados.</div>
+        ) : familiares.map((f, i) => (
           <div key={f.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', borderBottom: i < familiares.length - 1 ? '1px solid #f3f4f6' : 'none', opacity: f.activo ? 1 : 0.5 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
               <div style={{ width: 34, height: 34, borderRadius: '50%', background: '#fef3c7', color: '#92400e', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 700 }}>
@@ -509,7 +544,7 @@ function TabFamiliares() {
               <div>
                 <div style={{ fontSize: 13, fontWeight: 600, color: '#111827' }}>{f.nombre}</div>
                 <div style={{ fontSize: 11, color: '#9ca3af', marginTop: 2 }}>
-                  {f.email} · Accede a: <span style={{ color: '#374151', fontWeight: 600 }}>{nombreResidente(f.residenteId)}</span>
+                  {f.email} · Accede a: <span style={{ color: '#374151', fontWeight: 600 }}>{nombreResidente(f.residente_id)}</span>
                 </div>
               </div>
             </div>
