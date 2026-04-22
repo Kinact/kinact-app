@@ -5,12 +5,15 @@ import { supabase } from '../../../lib/supabase';
 
 // ─── Constantes ───────────────────────────────────────────────────────────────
 
-const MES_ACTUAL = (() => { const s = new Date().toLocaleString('es-ES', { month: 'long', year: 'numeric' }); return s.charAt(0).toUpperCase() + s.slice(1); })();
+const MES_ACTUAL = (() => {
+  const s = new Date().toLocaleString('es-ES', { month: 'long', year: 'numeric' });
+  return s.charAt(0).toUpperCase() + s.slice(1);
+})();
 
 const PROXIMAS_SESIONES = [
-  { dia: 'Lun 14', grupo: 'Grupo A', hora: '11:00h', estado: 'completada' },
-  { dia: 'Mar 15', grupo: 'Grupo B', hora: '10:30h', estado: 'hoy'        },
-  { dia: 'Mié 16', grupo: 'Grupo A', hora: '11:00h', estado: 'pendiente'  }
+  { dia: 'Lun 27', grupo: 'Grupo A', hora: '11:00h', estado: 'pendiente' },
+  { dia: 'Mar 28', grupo: 'Grupo B', hora: '10:30h', estado: 'pendiente' },
+  { dia: 'Mié 29', grupo: 'Grupo A', hora: '11:00h', estado: 'pendiente' }
 ];
 
 const ESTADO_SESION = {
@@ -19,31 +22,31 @@ const ESTADO_SESION = {
   pendiente:  { bg: '#f9fafb', color: '#9ca3af' }
 };
 
-// Grupos con IDs únicos de string — sin mezcla de tipos
+// Grupos calculados con los 8 residentes actuales
+// Grupo A: perfiles de alto rendimiento
+// Grupo B: perfiles con más soporte
+// Sugerencia: combinación complementaria
 const GRUPOS_DINAMISMO = [
   {
     id: 'A',
-    residentes: ['r1', 'r3', 'r4', 'r2'],
-    intercambios: 8.4,
+    residentes: ['r5', 'r3', 'r7', 'r1'],
+    intercambios: 7.2,
     color: 'success',
-    descripcion: 'Alta reciprocidad. Carmen actúa como catalizadora natural del grupo.',
-    esNuevo: false
+    descripcion: 'Alta reciprocidad. Concha actúa como catalizadora natural; Dolores refuerza la autonomía del grupo.'
   },
   {
     id: 'B',
-    residentes: ['r2', 'r4', 'r1', 'r3'],
-    intercambios: 5.1,
+    residentes: ['r2', 'r4', 'r6', 'r8'],
+    intercambios: 4.6,
     color: 'warning',
-    descripcion: 'Ritmo moderado. Considera añadir un perfil más activo para elevar la dinámica.',
-    esNuevo: false
+    descripcion: 'Ritmo moderado. El grupo avanza de forma sólida. Considera introducir un perfil más activo.'
   },
   {
-    id: 'C',
-    residentes: ['r1', 'r2', 'r3', 'r4'],
+    id: null,
+    residentes: ['r5', 'r8', 'r1', 'r4'],
     intercambios: null,
     color: 'info',
-    descripcion: 'Combinación sugerida por perfiles complementarios. Sin historial previo juntos.',
-    esNuevo: true
+    descripcion: 'Combinación sugerida: Concha y Rosa pueden guiar la dinámica de Bernardo y Tomás. Perfiles complementarios.'
   }
 ];
 
@@ -58,103 +61,152 @@ const GRUPO_STYLES = {
 export default function CenterDashboard() {
   const { navigateTo } = useApp();
 
-  // ── Sesiones reales desde Supabase ─────────────────────────────────────────
-  const [totalSesionesDB, setTotalSesionesDB] = useState(null);
-  const [ultimasSesionesDB, setUltimasSesionesDB] = useState([]);
+  // ── Datos desde Supabase ───────────────────────────────────────────────────
+  const [sesionesDB,  setSesionesDB]  = useState(null); // null = cargando
+  const [escalasDB,   setEscalasDB]   = useState(null);
 
   useEffect(() => {
-    // Contar sesiones reales guardadas
+    // Todas las sesiones
     supabase
       .from('kinact_sesiones')
-      .select('*', { count: 'exact', head: true })
-      .then(({ count }) => { if (count !== null) setTotalSesionesDB(count); });
-
-    // Últimas 5 sesiones para el panel de actividad reciente
-    supabase
-      .from('kinact_sesiones')
-      .select('residente_id, fecha, gaps_completados, engagement')
+      .select('residente_id, fecha, sesion_num, gaps_completados, intercambios, mediaciones, estado, engagement, autonomia, agitacion, fatiga')
       .order('created_at', { ascending: false })
-      .limit(5)
-      .then(({ data }) => { if (data) setUltimasSesionesDB(data); });
+      .then(({ data }) => {
+        setSesionesDB(data && data.length > 0 ? data : null);
+      });
+
+    // Todas las escalas clínicas
+    supabase
+      .from('kinact_escalas')
+      .select('residente_id, fecha, mec, gds, barthel, tug')
+      .order('fecha', { ascending: true })
+      .then(({ data }) => {
+        setEscalasDB(data && data.length > 0 ? data : null);
+      });
   }, []);
 
-  // ── Stats globales ──
+  // ── Stats globales — usa Supabase si disponible, si no mock ───────────────
   const stats = useMemo(() => {
-    const allHistorial = Object.values(MOCK_SESSION_HISTORY).flat();
+    const sesiones = sesionesDB ?? Object.values(MOCK_SESSION_HISTORY).flat();
 
+    const sesionesTotal     = sesiones.length;
+    const intercambiosTotal = sesiones.reduce((s, h) => s + (h.intercambios || 0), 0);
+    const mediacionesTotal  = sesiones.reduce((s, h) => s + (h.mediaciones || 0), 0);
+    const mediacionesMedia  = sesionesTotal ? (mediacionesTotal / sesionesTotal).toFixed(1) : '0';
+
+    // Mediaciones de las primeras sesiones vs. últimas (mejora)
+    const sesOrden = [...sesiones].sort((a, b) => a.fecha > b.fecha ? 1 : -1);
+    const primeras4 = sesOrden.slice(0, Math.min(4, sesOrden.length));
+    const medPrimero = primeras4.length
+      ? (primeras4.reduce((s, h) => s + (h.mediaciones || 0), 0) / primeras4.length).toFixed(1)
+      : mediacionesMedia;
+
+    // Asistencia: sesiones por residente / total esperado
+    const sesionesPorResidente = {};
+    sesiones.forEach(s => {
+      sesionesPorResidente[s.residente_id] = (sesionesPorResidente[s.residente_id] || 0) + 1;
+    });
+    const maxSesiones = Math.max(...Object.values(sesionesPorResidente), 1);
     const asistenciaMedia = Math.round(
-      MOCK_RESIDENTS.reduce((s, r) => {
-        const h = MOCK_SESSION_HISTORY[r.id] || [];
-        return s + (h.length / 13) * 100;
+      MOCK_RESIDENTS.reduce((sum, r) => {
+        const n = sesionesPorResidente[r.id] || 0;
+        return sum + (n / maxSesiones) * 100;
       }, 0) / MOCK_RESIDENTS.length
     );
 
-    // Guard contra división por cero cuando solo algunos residentes tienen escalas
-    const tugValues = Object.values(MOCK_ESCALAS)
-      .map(e => { const t = e.tug || []; return t[t.length - 1]?.valor ?? null; })
-      .filter(v => v !== null);
-    const tugMedio = tugValues.length ? (tugValues.reduce((s, v) => s + v, 0) / tugValues.length).toFixed(1) : 'N/A';
+    // Escalas: última medición por residente
+    const escalasFuente = escalasDB
+      ? (() => {
+          // Agrupar por residente
+          const byRes = {};
+          escalasDB.forEach(row => {
+            if (!byRes[row.residente_id]) byRes[row.residente_id] = { tug: [], gds: [], barthel: [], mec: [] };
+            if (row.tug     != null) byRes[row.residente_id].tug.push({     fecha: row.fecha, valor: row.tug });
+            if (row.gds     != null) byRes[row.residente_id].gds.push({     fecha: row.fecha, valor: row.gds });
+            if (row.barthel != null) byRes[row.residente_id].barthel.push({ fecha: row.fecha, valor: row.barthel });
+            if (row.mec     != null) byRes[row.residente_id].mec.push({     fecha: row.fecha, valor: row.mec });
+          });
+          return byRes;
+        })()
+      : MOCK_ESCALAS;
 
-    const gdsValues = Object.values(MOCK_ESCALAS)
-      .map(e => { const g = e.gds || []; return g[g.length - 1]?.valor ?? null; })
-      .filter(v => v !== null);
-    const gdsMedio = gdsValues.length ? (gdsValues.reduce((s, v) => s + v, 0) / gdsValues.length).toFixed(1) : 'N/A';
+    const tugValues     = Object.values(escalasFuente).map(e => e.tug?.slice(-1)[0]?.valor).filter(v => v != null);
+    const tugPrimeros   = Object.values(escalasFuente).map(e => e.tug?.[0]?.valor).filter(v => v != null);
+    const gdsValues     = Object.values(escalasFuente).map(e => e.gds?.slice(-1)[0]?.valor).filter(v => v != null);
+    const gdsPrimeros   = Object.values(escalasFuente).map(e => e.gds?.[0]?.valor).filter(v => v != null);
+    const barthelValues = Object.values(escalasFuente).map(e => e.barthel?.slice(-1)[0]?.valor).filter(v => v != null);
 
-    const barthelValues = Object.values(MOCK_ESCALAS)
-      .map(e => { const b = e.barthel || []; return b[b.length - 1]?.valor ?? null; })
-      .filter(v => v !== null);
-    const barthelMedio = barthelValues.length ? Math.round(barthelValues.reduce((s, v) => s + v, 0) / barthelValues.length) : 78;
+    const avg = arr => arr.length ? arr.reduce((s, v) => s + v, 0) / arr.length : null;
 
-    const sesionesTotal    = MOCK_RESIDENTS.reduce((s, r) => s + (MOCK_SESSION_HISTORY[r.id]?.length || 0), 0);
-    const intercambiosTotal = allHistorial.reduce((s, h) => s + h.intercambios, 0);
-    const mediacionesTotal  = allHistorial.reduce((s, h) => s + h.mediaciones, 0);
-    const mediacionesMedia  = allHistorial.length ? (mediacionesTotal / allHistorial.length).toFixed(1) : '0';
-
-    // Tendencias (primero vs último dato disponible)
-    const tugPrimero = Object.values(MOCK_ESCALAS).map(e => e.tug?.[0]?.valor).filter(Boolean);
-    const tugMedioIni = tugPrimero.length ? (tugPrimero.reduce((s, v) => s + v, 0) / tugPrimero.length).toFixed(1) : null;
-
-    const gdsPrimero = Object.values(MOCK_ESCALAS).map(e => e.gds?.[0]?.valor).filter(Boolean);
-    const gdsMedioIni = gdsPrimero.length ? (gdsPrimero.reduce((s, v) => s + v, 0) / gdsPrimero.length).toFixed(1) : null;
-
-    const medPrimero = allHistorial.length ? allHistorial.slice(0, 4).reduce((s, h) => s + h.mediaciones, 0) / 4 : 0;
+    const tugMedio    = avg(tugValues)?.toFixed(1)     ?? 'N/A';
+    const tugMedioIni = avg(tugPrimeros)?.toFixed(1)   ?? null;
+    const gdsMedio    = avg(gdsValues)?.toFixed(1)     ?? 'N/A';
+    const gdsMedioIni = avg(gdsPrimeros)?.toFixed(1)   ?? null;
+    const barthelMedio = avg(barthelValues) != null ? Math.round(avg(barthelValues)) : 78;
 
     return {
       asistenciaMedia, tugMedio, gdsMedio, barthelMedio,
       sesionesTotal, mediacionesMedia, intercambiosTotal,
-      tugMedioIni, gdsMedioIni, medPrimero: medPrimero.toFixed(1)
+      tugMedioIni, gdsMedioIni, medPrimero,
+      fuenteDB: sesionesDB !== null
     };
-  }, []);
+  }, [sesionesDB, escalasDB]);
 
-  // ── Alertas clínicas ──
+  // ── Últimas 5 sesiones para el panel ──────────────────────────────────────
+  const ultimasSesiones = useMemo(() => {
+    if (sesionesDB) return sesionesDB.slice(0, 5);
+    // Fallback: últimas del mock
+    return Object.values(MOCK_SESSION_HISTORY)
+      .flat()
+      .sort((a, b) => b.fecha > a.fecha ? 1 : -1)
+      .slice(0, 5)
+      .map(s => {
+        const res = MOCK_RESIDENTS.find(r =>
+          (MOCK_SESSION_HISTORY[r.id] || []).some(h => h.sesion === s.sesion && h.fecha === s.fecha)
+        );
+        return { ...s, residente_id: res?.id };
+      });
+  }, [sesionesDB]);
+
+  // ── Alertas clínicas ──────────────────────────────────────────────────────
   const alertas = useMemo(() => MOCK_RESIDENTS.map(r => {
-    const hist      = MOCK_SESSION_HISTORY[r.id] || [];
-    const ultimas3  = hist.slice(-3);
-    const tugActual = MOCK_ESCALAS[r.id]?.tug?.slice(-1)[0]?.valor;
-    if (ultimas3.length === 3 && ultimas3.every(h => h.engagement === 'bajo' || h.fatiga)) {
+    const hist = sesionesDB
+      ? sesionesDB.filter(s => s.residente_id === r.id).slice(-3)
+      : (MOCK_SESSION_HISTORY[r.id] || []).slice(-3);
+
+    const escalasRes = escalasDB
+      ? (() => {
+          const rows = escalasDB.filter(row => row.residente_id === r.id && row.tug != null);
+          return rows.length ? rows[rows.length - 1].tug : null;
+        })()
+      : MOCK_ESCALAS[r.id]?.tug?.slice(-1)[0]?.valor;
+
+    if (hist.length >= 3 && hist.every(h => h.engagement === 'bajo' || h.fatiga)) {
       return { residente: r, motivo: '3 sesiones consecutivas con engagement bajo o fatiga detectada.' };
     }
-    if (tugActual != null && tugActual > 20) {
-      return { residente: r, motivo: `TUG ${tugActual}s este mes — alto riesgo de caídas.` };
+    if (escalasRes != null && escalasRes > 20) {
+      return { residente: r, motivo: `TUG ${escalasRes}s — alto riesgo de caídas.` };
     }
     return null;
-  }).filter(Boolean), []);
+  }).filter(Boolean), [sesionesDB, escalasDB]);
 
-  // ── Estado por residente para lista ──
+  // ── Estado por residente ───────────────────────────────────────────────────
   const estadoResidente = (r) => {
     const estaEnAlerta = alertas.some(a => a.residente.id === r.id);
-    const hist = MOCK_SESSION_HISTORY[r.id] || [];
-    const ult  = hist[hist.length - 1];
+    const hist = sesionesDB
+      ? sesionesDB.filter(s => s.residente_id === r.id)
+      : (MOCK_SESSION_HISTORY[r.id] || []);
+    const ult = hist[hist.length - 1];
     if (estaEnAlerta) return '#ef4444';
     if (ult?.engagement === 'medio') return '#f59e0b';
     return '#22c55e';
   };
 
-  const verPerfil = (residenteId) => navigateTo('resident', { residentId: residenteId });
-
   const verdes   = MOCK_RESIDENTS.filter(r => estadoResidente(r) === '#22c55e').length;
   const naranjas = MOCK_RESIDENTS.filter(r => estadoResidente(r) === '#f59e0b').length;
   const rojos    = MOCK_RESIDENTS.filter(r => estadoResidente(r) === '#ef4444').length;
+
+  const verPerfil = (id) => navigateTo('resident', { residentId: id });
 
   const FILA1 = [
     {
@@ -166,15 +218,15 @@ export default function CenterDashboard() {
     {
       valor: `${stats.asistenciaMedia}%`,
       label: 'Asistencia media',
-      sub: 'Sobre 13 sesiones programadas',
+      sub: `Sobre ${Math.max(...Object.values(
+        (sesionesDB || []).reduce((acc, s) => { acc[s.residente_id] = (acc[s.residente_id] || 0) + 1; return acc; }, {})
+      ) || [10])} sesiones`,
       color: stats.asistenciaMedia >= 70 ? '#16a34a' : '#d97706'
     },
     {
-      valor: totalSesionesDB !== null
-        ? `${totalSesionesDB}`
-        : `${stats.sesionesTotal}`,
+      valor: stats.sesionesTotal,
       label: 'Sesiones registradas',
-      sub: totalSesionesDB !== null ? 'Guardadas en Supabase' : 'Datos locales',
+      sub: stats.fuenteDB ? 'Guardadas en Supabase' : 'Datos locales',
       color: '#16a34a'
     },
     {
@@ -190,13 +242,19 @@ export default function CenterDashboard() {
       valor: `${stats.tugMedio}s`,
       label: 'TUG medio',
       sub: stats.tugMedioIni ? `Inicio: ${stats.tugMedioIni}s` : 'Movilidad funcional',
-      color: stats.tugMedio === 'N/A' ? '#6b7280' : parseFloat(stats.tugMedio) <= 12 ? '#16a34a' : parseFloat(stats.tugMedio) <= 20 ? '#d97706' : '#dc2626'
+      color: stats.tugMedio === 'N/A' ? '#6b7280'
+        : parseFloat(stats.tugMedio) <= 12 ? '#16a34a'
+        : parseFloat(stats.tugMedio) <= 20 ? '#d97706'
+        : '#dc2626'
     },
     {
       valor: stats.gdsMedio,
       label: 'GDS-15 medio',
       sub: stats.gdsMedioIni ? `Inicio: ${stats.gdsMedioIni}` : 'Depresión geriátrica',
-      color: stats.gdsMedio === 'N/A' ? '#6b7280' : parseFloat(stats.gdsMedio) < 6 ? '#16a34a' : parseFloat(stats.gdsMedio) < 11 ? '#d97706' : '#dc2626'
+      color: stats.gdsMedio === 'N/A' ? '#6b7280'
+        : parseFloat(stats.gdsMedio) < 6 ? '#16a34a'
+        : parseFloat(stats.gdsMedio) < 11 ? '#d97706'
+        : '#dc2626'
     },
     {
       valor: stats.mediacionesMedia,
@@ -229,9 +287,9 @@ export default function CenterDashboard() {
             <div style={{ fontSize: 12, color: '#9ca3af' }}>{MES_ACTUAL}</div>
           </div>
           <div style={{ display: 'flex', gap: 8 }}>
-            <button onClick={() => navigateTo('residents')} style={btnBase()}>Gestión de residentes</button>
+            <button onClick={() => navigateTo('residents')}       style={btnBase()}>Gestión de residentes</button>
             <button onClick={() => navigateTo('user-management')} style={btnBase()}>Gestión de usuarios</button>
-            <button style={btnBase()}>Exportar informe mensual</button>
+            <button                                               style={btnBase()}>Exportar informe mensual</button>
             <button onClick={() => navigateTo('clinical-scales')} style={btnBase()}>Escalas clínicas</button>
             <button onClick={() => navigateTo('session-selector')} style={btnBase('#dbeafe', '#1d4ed8', '#93c5fd')}>Nueva sesión</button>
           </div>
@@ -279,22 +337,17 @@ export default function CenterDashboard() {
                     <div style={{ fontSize: 12, fontWeight: 600, color: '#111827' }}>{a.residente.nombre}</div>
                     <div style={{ fontSize: 11, color: '#dc2626', marginTop: 2 }}>{a.motivo}</div>
                   </div>
-                  <button
-                    onClick={() => verPerfil(a.residente.id)}
-                    style={btnBase()}
-                  >
-                    Ver perfil
-                  </button>
+                  <button onClick={() => verPerfil(a.residente.id)} style={btnBase()}>Ver perfil</button>
                 </div>
               ))}
             </div>
           </div>
         )}
 
-        {/* ── Zona central 2 columnas ── */}
-        <div style={{ display: 'grid', gridTemplateColumns: '280px 1fr', gap: 12 }}>
+        {/* ── Zona central: 2 columnas fijas ── */}
+        <div style={{ display: 'grid', gridTemplateColumns: '280px 1fr', gap: 12, alignItems: 'start' }}>
 
-          {/* Columna izquierda */}
+          {/* ── Columna izquierda ── */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
 
             {/* Lista residentes */}
@@ -310,9 +363,14 @@ export default function CenterDashboard() {
                 </summary>
 
                 {MOCK_RESIDENTS.map((r, i) => {
-                  const hist = MOCK_SESSION_HISTORY[r.id] || [];
-                  const tug  = MOCK_ESCALAS[r.id]?.tug?.slice(-1)[0]?.valor;
-                  const tugPrev = MOCK_ESCALAS[r.id]?.tug?.slice(-2, -1)[0]?.valor;
+                  const hist = sesionesDB
+                    ? sesionesDB.filter(s => s.residente_id === r.id)
+                    : (MOCK_SESSION_HISTORY[r.id] || []);
+                  const tugRows = escalasDB
+                    ? escalasDB.filter(row => row.residente_id === r.id && row.tug != null)
+                    : (MOCK_ESCALAS[r.id]?.tug || []);
+                  const tug     = tugRows[tugRows.length - 1]?.tug ?? tugRows[tugRows.length - 1]?.valor;
+                  const tugPrev = tugRows[tugRows.length - 2]?.tug ?? tugRows[tugRows.length - 2]?.valor;
                   const tugTend = tug && tugPrev ? (tug < tugPrev ? '↓' : tug > tugPrev ? '↑' : '→') : '';
                   const estadoColor = estadoResidente(r);
 
@@ -368,14 +426,19 @@ export default function CenterDashboard() {
             </div>
           </div>
 
-          {/* Actividad reciente (Supabase) */}
-          {ultimasSesionesDB.length > 0 && (
+          {/* ── Columna derecha ── */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+
+            {/* Actividad reciente */}
             <div style={{ ...cardStyle, padding: 12 }}>
               <div style={{ fontSize: 12, fontWeight: 600, color: '#374151', marginBottom: 8 }}>
                 Últimas sesiones registradas
+                {stats.fuenteDB && (
+                  <span style={{ fontSize: 10, color: '#9ca3af', fontWeight: 400, marginLeft: 6 }}>· Supabase</span>
+                )}
               </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
-                {ultimasSesionesDB.map((s, i) => {
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                {ultimasSesiones.slice(0, 5).map((s, i) => {
                   const res = MOCK_RESIDENTS.find(r => r.id === s.residente_id);
                   const engColor = s.engagement === 'alto' ? '#15803d' : s.engagement === 'medio' ? '#d97706' : '#dc2626';
                   return (
@@ -383,7 +446,7 @@ export default function CenterDashboard() {
                       display: 'flex', justifyContent: 'space-between',
                       alignItems: 'center', fontSize: 11,
                       padding: '4px 0',
-                      borderBottom: i < ultimasSesionesDB.length - 1 ? '0.5px solid #f3f4f6' : 'none'
+                      borderBottom: i < 4 ? '0.5px solid #f3f4f6' : 'none'
                     }}>
                       <span style={{ color: '#374151', fontWeight: 500 }}>
                         {res?.nombre || s.residente_id}
@@ -398,97 +461,92 @@ export default function CenterDashboard() {
                 })}
               </div>
             </div>
-          )}
 
-          {/* Mapa de dinamismo */}
-          <div style={{
-            background: 'white', borderRadius: 10,
-            border: '2px solid #93c5fd', padding: 14,
-            display: 'flex', flexDirection: 'column', gap: 10
-          }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-              <div>
-                <div style={{ fontSize: 13, fontWeight: 600, color: '#111827' }}>Mapa de dinamismo de grupo</div>
-                <div style={{ fontSize: 11, color: '#6b7280', marginTop: 2 }}>Combinaciones ordenadas por intercambios autónomos</div>
-              </div>
-              <span style={{
-                fontSize: 10, padding: '3px 8px', borderRadius: 6,
-                background: '#dbeafe', color: '#1d4ed8', fontWeight: 500
-              }}>
-                Basado en {stats.sesionesTotal} sesiones
-              </span>
-            </div>
-
-            {GRUPOS_DINAMISMO.map(grupo => {
-              const gs = GRUPO_STYLES[grupo.color];
-              return (
-                <div key={grupo.id} style={{
-                  background: gs.bg, border: `1px solid ${gs.border}`,
-                  borderRadius: 8, padding: 10
-                }}>
-                  {/* Header del grupo */}
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-                    {grupo.esNuevo ? (
-                      <>
-                        <span style={{ fontSize: 11, fontWeight: 600, color: gs.color }}>Sugerencia nueva combinación</span>
-                        <span style={{ fontSize: 10, color: gs.color }}>Sin historial previo juntos</span>
-                      </>
-                    ) : (
-                      <>
-                        <span style={{ fontSize: 11, fontWeight: 600, color: gs.color }}>
-                          Grupo {grupo.id} — {grupo.color === 'success' ? 'Alta dinámica' : 'Dinámica moderada'}
-                        </span>
-                        <span style={{ fontSize: 12, fontWeight: 600, color: gs.color }}>
-                          {grupo.intercambios} intercambios / sesión
-                        </span>
-                      </>
-                    )}
-                  </div>
-
-                  {/* Fila de residentes */}
-                  <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 4 }}>
-                    {grupo.residentes.map((rid, i) => {
-                      const r = MOCK_RESIDENTS.find(m => m.id === rid);
-                      if (!r) return null;
-                      return (
-                        <span key={rid} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                          <span style={{
-                            fontSize: 11, padding: '3px 8px', borderRadius: 6,
-                            background: 'white', color: gs.color, fontWeight: 500,
-                            border: `1px solid ${gs.border}`
-                          }}>
-                            {r.nombre.split(' ')[0]}
-                          </span>
-                          {i < grupo.residentes.length - 1 && (
-                            <span style={{ fontSize: 11, color: gs.color, fontWeight: 600 }}>+</span>
-                          )}
-                        </span>
-                      );
-                    })}
-                    <button
-                      style={{
-                        marginLeft: 'auto',
-                        padding: '4px 12px', fontSize: 11,
-                        borderRadius: 6, border: `1px solid ${gs.btnBorder}`,
-                        background: gs.btnBg, color: gs.btnColor,
-                        cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500
-                      }}
-                      onClick={() => navigateTo('session-selector')}
-                    >
-                      {grupo.esNuevo ? 'Probar grupo' : 'Usar grupo'}
-                    </button>
-                  </div>
-
-                  {/* Descripción */}
-                  <div style={{ fontSize: 10, color: gs.color, marginTop: 6, lineHeight: 1.4 }}>
-                    {grupo.descripcion}
-                    {grupo.color === 'warning' && (
-                      <span> Considera añadir un perfil más activo.</span>
-                    )}
-                  </div>
+            {/* Mapa de dinamismo de grupo */}
+            <div style={{
+              background: 'white', borderRadius: 10,
+              border: '2px solid #93c5fd', padding: 14,
+              display: 'flex', flexDirection: 'column', gap: 10
+            }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                <div>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: '#111827' }}>Mapa de dinamismo de grupo</div>
+                  <div style={{ fontSize: 11, color: '#6b7280', marginTop: 2 }}>Combinaciones ordenadas por intercambios autónomos</div>
                 </div>
-              );
-            })}
+                <span style={{
+                  fontSize: 10, padding: '3px 8px', borderRadius: 6,
+                  background: '#dbeafe', color: '#1d4ed8', fontWeight: 500
+                }}>
+                  Basado en {stats.sesionesTotal} sesiones
+                </span>
+              </div>
+
+              {GRUPOS_DINAMISMO.map((grupo, gi) => {
+                const gs = GRUPO_STYLES[grupo.color];
+                const esNuevo = grupo.id === null;
+                return (
+                  <div key={gi} style={{
+                    background: gs.bg, border: `1px solid ${gs.border}`,
+                    borderRadius: 8, padding: 10
+                  }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                      {esNuevo ? (
+                        <>
+                          <span style={{ fontSize: 11, fontWeight: 600, color: gs.color }}>Sugerencia — combinación nueva</span>
+                          <span style={{ fontSize: 10, color: gs.color }}>Sin historial previo juntos</span>
+                        </>
+                      ) : (
+                        <>
+                          <span style={{ fontSize: 11, fontWeight: 600, color: gs.color }}>
+                            Grupo {grupo.id} — {grupo.color === 'success' ? 'Alta dinámica' : 'Dinámica moderada'}
+                          </span>
+                          <span style={{ fontSize: 12, fontWeight: 600, color: gs.color }}>
+                            {grupo.intercambios} intercambios / sesión
+                          </span>
+                        </>
+                      )}
+                    </div>
+
+                    <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 4 }}>
+                      {grupo.residentes.map((rid, i) => {
+                        const r = MOCK_RESIDENTS.find(m => m.id === rid);
+                        if (!r) return null;
+                        return (
+                          <span key={rid} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                            <span style={{
+                              fontSize: 11, padding: '3px 8px', borderRadius: 6,
+                              background: 'white', color: gs.color, fontWeight: 500,
+                              border: `1px solid ${gs.border}`
+                            }}>
+                              {r.nombre.split(' ')[0]}
+                            </span>
+                            {i < grupo.residentes.length - 1 && (
+                              <span style={{ fontSize: 11, color: gs.color, fontWeight: 600 }}>+</span>
+                            )}
+                          </span>
+                        );
+                      })}
+                      <button
+                        style={{
+                          marginLeft: 'auto',
+                          padding: '4px 12px', fontSize: 11,
+                          borderRadius: 6, border: `1px solid ${gs.btnBorder}`,
+                          background: gs.btnBg, color: gs.btnColor,
+                          cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500
+                        }}
+                        onClick={() => navigateTo('session-selector')}
+                      >
+                        {esNuevo ? 'Probar grupo' : 'Usar grupo'}
+                      </button>
+                    </div>
+
+                    <div style={{ fontSize: 10, color: gs.color, marginTop: 6, lineHeight: 1.4 }}>
+                      {grupo.descripcion}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
           </div>
         </div>
 
