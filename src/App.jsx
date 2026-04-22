@@ -1,5 +1,7 @@
 import { AppProvider, useApp } from './context/AppContext';
+import Landing from './views/auth/Landing/Landing';
 import Login from './views/auth/Login/Login';
+import Register from './views/auth/Register/Register';
 import Onboarding from './views/auth/Onboarding/Onboarding';
 import SessionSelector from './views/facilitator/SessionSelector/SessionSelector';
 import ResidentManager from './views/facilitator/ResidentManager/ResidentManager';
@@ -60,7 +62,9 @@ function AppRouter() {
   };
 
   switch (currentView) {
+    case 'landing':           return <Landing />;
     case 'login':             return <Login />;
+    case 'register':          return <Register />;
     case 'onboarding':        return <Onboarding />;
     case 'session-selector':  return <SessionSelector
                                 onIniciarSesion={handleIniciarSesion}
@@ -78,7 +82,7 @@ function AppRouter() {
     case 'family':            return <FamilyPortal />;
     case 'clinical-scales':   return <ClinicalScales />;
     case 'user-management':   return <UserManagement />;
-    default:                  return <Login />;
+    default:                  return <Landing />;
   }
 }
 

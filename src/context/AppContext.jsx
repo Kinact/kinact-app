@@ -17,7 +17,7 @@ export function AppProvider({ children }) {
   const [profile, setProfile] = useState(null);
   const [userRole, setUserRole] = useState(null);
   const [authLoading, setAuthLoading] = useState(true);
-  const [currentView, setCurrentView] = useState('login');
+  const [currentView, setCurrentView] = useState('landing');
   const [navigationHistory, setNavigationHistory] = useState([]);
 
   const [sessionState, setSessionState] = useState({
@@ -97,7 +97,7 @@ export function AppProvider({ children }) {
     setUser(null);
     setProfile(null);
     setUserRole(null);
-    setCurrentView('login');
+    setCurrentView('landing');
     setNavigationHistory([]);
     localStorage.removeItem('kinactRole');
   };
