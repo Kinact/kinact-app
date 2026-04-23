@@ -439,7 +439,9 @@ function TabFacilitadores() {
 // ─── Pestaña: Familiares ──────────────────────────────────────────────────────
 
 function TabFamiliares() {
-  const { residents } = useApp();
+  const { residents, orgId } = useApp();
+  const orgIdEfectivo = orgId || ORG_DEMO_ID;
+
   const [familiares,   setFamiliares]   = useState([]);
   const [cargando,     setCargando]     = useState(true);
   const [formAbierto,  setFormAbierto]  = useState(false);
@@ -456,6 +458,7 @@ function TabFamiliares() {
     const { data } = await supabase
       .from('kinact_familiares')
       .select('*')
+      .eq('org_id', orgIdEfectivo)
       .order('created_at', { ascending: false });
     setFamiliares(data || []);
     setCargando(false);
@@ -473,6 +476,7 @@ function TabFamiliares() {
       nombre:       form.nombre.trim(),
       email:        form.email.trim(),
       residente_id: form.residenteId,
+      org_id:       orgIdEfectivo,
       activo:       true
     });
     if (!error) {
