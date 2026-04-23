@@ -2,7 +2,7 @@ import { AppProvider, useApp } from './context/AppContext';
 import Landing from './views/auth/Landing/Landing';
 import Login from './views/auth/Login/Login';
 import Register from './views/auth/Register/Register';
-import Onboarding from './views/auth/Onboarding/Onboarding';
+import Onboarding from './views/admin/Onboarding/Onboarding';
 import SessionSelector from './views/facilitator/SessionSelector/SessionSelector';
 import ResidentManager from './views/facilitator/ResidentManager/ResidentManager';
 import SessionActive from './views/facilitator/SessionActive/SessionActive';

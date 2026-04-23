@@ -56,7 +56,11 @@ export function AppProvider({ children }) {
       if (data.rol === 'familiar' && data.residente_id) {
         setSelectedResidentId(data.residente_id);
       }
-      setCurrentView(VISTA_POR_ROL[data.rol] || 'center');
+      if (data.rol === 'director' && !data.onboarding_done) {
+        setCurrentView('onboarding');
+      } else {
+        setCurrentView(VISTA_POR_ROL[data.rol] || 'center');
+      }
       // Cargar residentes de la organización
       if (data.org_id) {
         supabase
