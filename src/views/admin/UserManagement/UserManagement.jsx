@@ -1,7 +1,11 @@
 import { useState, useEffect } from 'react';
+import { createClient } from '@supabase/supabase-js';
 import { jsPDF } from 'jspdf';
 import { useApp } from '../../../context/AppContext';
 import { supabase } from '../../../lib/supabase';
+
+const supabaseUrl     = import.meta.env.VITE_SUPABASE_URL;
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 import { TABLERO_COLORS_DARK } from '../../../constants/tableros';
 
 const ORG_DEMO_ID = '00000000-0000-0000-0000-000000000001';
@@ -349,43 +353,113 @@ function TabResidentes() {
 
 // ─── Pestaña: Facilitadores ───────────────────────────────────────────────────
 
-const FACILITADORES_INICIAL = [
-  { id: 'f1', nombre: 'Ana Martínez',  email: 'ana.martinez@santaclara.es',  activo: true },
-  { id: 'f2', nombre: 'Carlos López',  email: 'carlos.lopez@santaclara.es',  activo: true },
-];
-
 function TabFacilitadores() {
-  const [facilitadores, setFacilitadores] = useState(FACILITADORES_INICIAL);
-  const [formAbierto,   setFormAbierto]   = useState(false);
-  const [credenciales,  setCredenciales]  = useState(null);
-  const [mostrarPass,   setMostrarPass]   = useState(false);
+  const { orgId } = useApp();
+  const orgIdEfectivo = orgId || ORG_DEMO_ID;
+
+  const [facilitadores,  setFacilitadores]  = useState([]);
+  const [cargando,       setCargando]       = useState(true);
+  const [formAbierto,    setFormAbierto]    = useState(false);
+  const [guardando,      setGuardando]      = useState(false);
+  const [desactivando,   setDesactivando]   = useState(null);
+  const [credenciales,   setCredenciales]   = useState(null);
+  const [mostrarPass,    setMostrarPass]    = useState(false);
+  const [error,          setError]          = useState('');
   const [form, setForm] = useState({ nombre: '', email: '', password: '' });
 
   const set = (k, v) => setForm(prev => ({ ...prev, [k]: v }));
   const generar = () => set('password', generarPassword());
 
-  const guardar = () => {
-    if (!form.nombre.trim() || !form.email.trim() || form.password.length < 8) return;
-    const nuevo = { id: 'f' + Date.now(), nombre: form.nombre.trim(), email: form.email.trim(), activo: true };
-    setFacilitadores(prev => [...prev, nuevo]);
-    setCredenciales({ email: form.email.trim(), password: form.password });
-    setForm({ nombre: '', email: '', password: '' });
-    setFormAbierto(false);
-    setMostrarPass(false);
+  const cargar = async () => {
+    setCargando(true);
+    const { data } = await supabase
+      .from('kinact_facilitadores')
+      .select('*')
+      .eq('org_id', orgIdEfectivo)
+      .eq('activo', true)
+      .order('created_at', { ascending: true });
+    setFacilitadores(data || []);
+    setCargando(false);
   };
 
-  const desactivar = (id) => setFacilitadores(prev => prev.map(f => f.id === id ? { ...f, activo: false } : f));
+  useEffect(() => { cargar(); }, [orgIdEfectivo]);
+
+  const guardar = async () => {
+    if (!form.nombre.trim() || !form.email.trim() || form.password.length < 8) {
+      setError('Nombre, email y contraseña (mín. 8 caracteres) son obligatorios.');
+      return;
+    }
+    setGuardando(true);
+    setError('');
+
+    // Crear usuario en Supabase Auth con cliente temporal (no reemplaza la sesión del director)
+    const tmpClient = createClient(supabaseUrl, supabaseAnonKey, {
+      auth: { persistSession: false, autoRefreshToken: false },
+    });
+    const { data: authData, error: authErr } = await tmpClient.auth.signUp({
+      email: form.email.trim(),
+      password: form.password,
+    });
+
+    if (authErr) {
+      setError('Error al crear usuario: ' + authErr.message);
+      setGuardando(false);
+      return;
+    }
+
+    const userId = authData.user?.id;
+
+    // Asignar perfil con rol facilitador (función SECURITY DEFINER)
+    if (userId) {
+      await supabase.rpc('create_facilitador_profile', {
+        p_user_id: userId,
+        p_nombre:  form.nombre.trim(),
+        p_org_id:  orgIdEfectivo,
+      });
+    }
+
+    // Guardar en tabla de facilitadores del centro
+    const { error: insErr } = await supabase.from('kinact_facilitadores').insert({
+      org_id:       orgIdEfectivo,
+      nombre:       form.nombre.trim(),
+      email:        form.email.trim(),
+      auth_user_id: userId || null,
+      activo:       true,
+    });
+
+    if (insErr) {
+      setError('Error al registrar facilitador: ' + insErr.message);
+    } else {
+      setCredenciales({ email: form.email.trim(), password: form.password });
+      setForm({ nombre: '', email: '', password: '' });
+      setFormAbierto(false);
+      setMostrarPass(false);
+      cargar();
+    }
+    setGuardando(false);
+  };
+
+  const desactivar = async (id, nombre) => {
+    if (!window.confirm(`¿Desactivar a ${nombre}?`)) return;
+    setDesactivando(id);
+    await supabase.from('kinact_facilitadores').update({ activo: false }).eq('id', id);
+    setDesactivando(null);
+    cargar();
+  };
 
   return (
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-        <div style={{ fontSize: 13, color: '#6b7280' }}>{facilitadores.filter(f => f.activo).length} facilitador{facilitadores.filter(f => f.activo).length !== 1 ? 'es activos' : ' activo'}</div>
-        <button onClick={() => { setFormAbierto(v => !v); setCredenciales(null); }} style={btnBase('#dbeafe', '#1d4ed8', '#93c5fd')}>
+        <div style={{ fontSize: 13, color: '#6b7280' }}>
+          {cargando ? 'Cargando…' : `${facilitadores.length} facilitador${facilitadores.length !== 1 ? 'es activos' : ' activo'}`}
+        </div>
+        <button onClick={() => { setFormAbierto(v => !v); setCredenciales(null); setError(''); }} style={btnBase('#dbeafe', '#1d4ed8', '#93c5fd')}>
           {formAbierto ? '✕ Cancelar' : '+ Añadir facilitador'}
         </button>
       </div>
 
       {credenciales && <CredencialesBox email={credenciales.email} password={credenciales.password} />}
+      {error && <div style={{ background: '#fff5f5', border: '1px solid #fecaca', borderRadius: 6, padding: '8px 12px', marginBottom: 10, fontSize: 13, color: '#991b1b', fontWeight: 600 }}>{error}</div>}
 
       {formAbierto && (
         <div style={{ background: '#f9fafb', border: '1px solid #e5e7eb', borderRadius: 8, padding: 16, marginBottom: 14, marginTop: 10 }}>
@@ -408,14 +482,20 @@ function TabFacilitadores() {
           </div>)}
           <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 4 }}>
             <button onClick={() => setFormAbierto(false)} style={btnBase()}>Cancelar</button>
-            <button onClick={guardar} style={btnBase('#dbeafe', '#1d4ed8', '#93c5fd')}>Crear facilitador</button>
+            <button onClick={guardar} disabled={guardando} style={btnBase('#dbeafe', '#1d4ed8', '#93c5fd')}>
+              {guardando ? 'Creando…' : 'Crear facilitador'}
+            </button>
           </div>
         </div>
       )}
 
       <div style={{ background: 'white', border: '1px solid #e5e7eb', borderRadius: 10, overflow: 'hidden' }}>
-        {facilitadores.map((f, i) => (
-          <div key={f.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', borderBottom: i < facilitadores.length - 1 ? '1px solid #f3f4f6' : 'none', opacity: f.activo ? 1 : 0.5 }}>
+        {cargando ? (
+          <div style={{ padding: 24, textAlign: 'center', color: '#9ca3af', fontSize: 13 }}>Cargando facilitadores…</div>
+        ) : facilitadores.length === 0 ? (
+          <div style={{ padding: 24, textAlign: 'center', color: '#9ca3af', fontSize: 13 }}>No hay facilitadores registrados aún.</div>
+        ) : facilitadores.map((f, i) => (
+          <div key={f.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', borderBottom: i < facilitadores.length - 1 ? '1px solid #f3f4f6' : 'none' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
               <div style={{ width: 34, height: 34, borderRadius: '50%', background: '#eff6ff', color: '#1d4ed8', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 700 }}>
                 {f.nombre.split(' ').map(n => n[0]).join('').slice(0, 2)}
@@ -426,8 +506,14 @@ function TabFacilitadores() {
               </div>
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              <BadgeActivo activo={f.activo} />
-              {f.activo && <button onClick={() => desactivar(f.id)} style={btnBase('#fff5f5', '#991b1b', '#fecaca')}>Desactivar</button>}
+              <BadgeActivo activo={true} />
+              <button
+                onClick={() => desactivar(f.id, f.nombre)}
+                disabled={desactivando === f.id}
+                style={btnBase('#fff5f5', '#991b1b', '#fecaca')}
+              >
+                {desactivando === f.id ? '…' : 'Desactivar'}
+              </button>
             </div>
           </div>
         ))}
