@@ -4,7 +4,7 @@ import { useApp } from '../../../context/AppContext';
 import { supabase } from '../../../lib/supabase';
 import { TABLERO_COLORS_DARK } from '../../../constants/tableros';
 
-const CENTRO_ID = '00000000-0000-0000-0000-000000000001';
+const ORG_DEMO_ID = '00000000-0000-0000-0000-000000000001';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -178,13 +178,16 @@ function exportarPDF(residentes) {
 // ─── Pestaña: Residentes ──────────────────────────────────────────────────────
 
 function TabResidentes() {
-  const { navigateTo } = useApp();
-  const [residentes,   setResidentes]   = useState([]);
-  const [cargando,     setCargando]     = useState(true);
-  const [formAbierto,  setFormAbierto]  = useState(false);
-  const [guardando,    setGuardando]    = useState(false);
-  const [error,        setError]        = useState('');
-  const [exito,        setExito]        = useState('');
+  const { navigateTo, orgId, setResidents } = useApp();
+  const orgIdEfectivo = orgId || ORG_DEMO_ID;
+
+  const [residentes,  setResidentes]  = useState([]);
+  const [cargando,    setCargando]    = useState(true);
+  const [formAbierto, setFormAbierto] = useState(false);
+  const [guardando,   setGuardando]   = useState(false);
+  const [desactivando,setDesactivando]= useState(null);
+  const [error,       setError]       = useState('');
+  const [exito,       setExito]       = useState('');
   const [form, setForm] = useState({
     nombre: '', iniciales: '', tablero_habitual: 'casa',
     incorporacion: new Date().toISOString().split('T')[0],
@@ -192,23 +195,36 @@ function TabResidentes() {
 
   const set = (k, v) => setForm(prev => ({ ...prev, [k]: v }));
 
-  // ── Cargar desde Supabase ──
   const cargarResidentes = async () => {
     setCargando(true);
-    const { data, error: err } = await supabase
+    const { data } = await supabase
       .from('residentes')
       .select('*')
-      .eq('centro_id', CENTRO_ID)
+      .eq('org_id', orgIdEfectivo)
+      .eq('activo', true)
       .order('created_at', { ascending: true });
-    if (!err) setResidentes(data || []);
+    const rows = data || [];
+    setResidentes(rows);
+    // Sincronizar contexto global
+    setResidents(rows.map(r => ({
+      id:              r.ref_id || r.id,
+      uuid:            r.id,
+      nombre:          r.nombre,
+      iniciales:       r.iniciales || r.nombre.split(' ').map(w => w[0]).join('').slice(0,2).toUpperCase(),
+      tableroHabitual: r.tablero_habitual,
+      incorporacion:   r.incorporacion,
+      sesiones:        r.sesiones || 0,
+    })));
     setCargando(false);
   };
 
-  useEffect(() => { cargarResidentes(); }, []);
+  useEffect(() => { cargarResidentes(); }, [orgIdEfectivo]);
 
-  // ── Guardar en Supabase ──
   const guardar = async () => {
-    if (!form.nombre.trim() || !form.iniciales.trim()) return;
+    if (!form.nombre.trim() || !form.iniciales.trim()) {
+      setError('Nombre e iniciales son obligatorios.');
+      return;
+    }
     setGuardando(true);
     setError('');
 
@@ -217,8 +233,8 @@ function TabResidentes() {
       iniciales:        form.iniciales.trim().toUpperCase().slice(0, 2),
       tablero_habitual: form.tablero_habitual,
       incorporacion:    form.incorporacion,
-      sesiones:         0,
-      centro_id:        CENTRO_ID,
+      org_id:           orgIdEfectivo,
+      activo:           true,
     });
 
     if (err) {
@@ -226,50 +242,40 @@ function TabResidentes() {
     } else {
       setForm({ nombre: '', iniciales: '', tablero_habitual: 'casa', incorporacion: new Date().toISOString().split('T')[0] });
       setFormAbierto(false);
-      setExito('Residente guardado correctamente en la base de datos ✓');
+      setExito('Residente añadido correctamente ✓');
       setTimeout(() => setExito(''), 4000);
       cargarResidentes();
     }
     setGuardando(false);
   };
 
+  const desactivar = async (id, nombre) => {
+    if (!window.confirm(`¿Dar de baja a ${nombre}? Se ocultará del programa pero sus datos se conservan.`)) return;
+    setDesactivando(id);
+    await supabase.from('residentes').update({ activo: false }).eq('id', id);
+    setDesactivando(null);
+    cargarResidentes();
+  };
+
   return (
     <div>
-      {/* Cabecera */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
         <div style={{ fontSize: 13, color: '#6b7280' }}>
           {cargando ? 'Cargando…' : `${residentes.length} residente${residentes.length !== 1 ? 's' : ''} en programa`}
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
-          <button
-            onClick={() => exportarPDF(residentes)}
-            disabled={cargando || residentes.length === 0}
-            style={btnBase('#fef3c7', '#92400e', '#fcd34d')}
-          >
+          <button onClick={() => exportarPDF(residentes)} disabled={cargando || residentes.length === 0} style={btnBase('#fef3c7', '#92400e', '#fcd34d')}>
             Exportar PDF
           </button>
-          <button
-            onClick={() => setFormAbierto(v => !v)}
-            style={btnBase('#dbeafe', '#1d4ed8', '#93c5fd')}
-          >
+          <button onClick={() => setFormAbierto(v => !v)} style={btnBase('#dbeafe', '#1d4ed8', '#93c5fd')}>
             {formAbierto ? '✕ Cancelar' : '+ Añadir residente'}
           </button>
         </div>
       </div>
 
-      {/* Mensajes */}
-      {exito && (
-        <div style={{ background: '#f0fdf4', border: '1px solid #86efac', borderRadius: 6, padding: '8px 12px', marginBottom: 10, fontSize: 13, color: '#15803d', fontWeight: 600 }}>
-          {exito}
-        </div>
-      )}
-      {error && (
-        <div style={{ background: '#fff5f5', border: '1px solid #fecaca', borderRadius: 6, padding: '8px 12px', marginBottom: 10, fontSize: 13, color: '#991b1b', fontWeight: 600 }}>
-          {error}
-        </div>
-      )}
+      {exito && <div style={{ background: '#f0fdf4', border: '1px solid #86efac', borderRadius: 6, padding: '8px 12px', marginBottom: 10, fontSize: 13, color: '#15803d', fontWeight: 600 }}>{exito}</div>}
+      {error && <div style={{ background: '#fff5f5', border: '1px solid #fecaca', borderRadius: 6, padding: '8px 12px', marginBottom: 10, fontSize: 13, color: '#991b1b', fontWeight: 600 }}>{error}</div>}
 
-      {/* Formulario inline */}
       {formAbierto && (
         <div style={{ background: '#f9fafb', border: '1px solid #e5e7eb', borderRadius: 8, padding: 16, marginBottom: 14 }}>
           <div style={{ fontSize: 13, fontWeight: 700, color: '#111827', marginBottom: 12 }}>Nuevo residente</div>
@@ -290,13 +296,12 @@ function TabResidentes() {
           <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 4 }}>
             <button onClick={() => setFormAbierto(false)} style={btnBase()}>Cancelar</button>
             <button onClick={guardar} disabled={guardando} style={btnBase('#dbeafe', '#1d4ed8', '#93c5fd')}>
-              {guardando ? 'Guardando…' : 'Guardar en base de datos'}
+              {guardando ? 'Guardando…' : 'Guardar residente'}
             </button>
           </div>
         </div>
       )}
 
-      {/* Lista */}
       <div style={{ background: 'white', border: '1px solid #e5e7eb', borderRadius: 10, overflow: 'hidden' }}>
         {cargando ? (
           <div style={{ padding: 24, textAlign: 'center', color: '#9ca3af', fontSize: 13 }}>Cargando residentes…</div>
@@ -315,14 +320,25 @@ function TabResidentes() {
               <div>
                 <div style={{ fontSize: 13, fontWeight: 600, color: '#111827' }}>{r.nombre}</div>
                 <div style={{ fontSize: 11, color: '#9ca3af', marginTop: 2 }}>
-                  {r.sesiones ?? 0} sesione{(r.sesiones ?? 0) !== 1 ? 's' : ''} · desde {r.incorporacion || '—'}
-                  <span style={{ marginLeft: 8, fontSize: 10, color: '#d1d5db' }}>· Supabase ✓</span>
+                  Tablero: {r.tablero_habitual} · Desde {r.incorporacion || '—'}
                 </div>
               </div>
             </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <BadgeTablero tablero={r.tablero_habitual} />
-              <button onClick={() => navigateTo('resident', { residentId: r.id })} style={btnBase()}>Ver perfil</button>
+              <button
+                onClick={() => navigateTo('resident', { residentId: r.ref_id || r.id })}
+                style={btnBase()}
+              >
+                Ver perfil
+              </button>
+              <button
+                onClick={() => desactivar(r.id, r.nombre)}
+                disabled={desactivando === r.id}
+                style={btnBase('#fee2e2', '#b91c1c', '#fecaca')}
+              >
+                {desactivando === r.id ? '…' : 'Dar de baja'}
+              </button>
             </div>
           </div>
         ))}
