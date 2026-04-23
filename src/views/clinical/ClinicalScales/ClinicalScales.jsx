@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useApp } from '../../../context/AppContext';
-import { MOCK_RESIDENTS, MOCK_ESCALAS } from '../../../data/mockData';
+import { MOCK_ESCALAS } from '../../../data/mockData';
 import { supabase } from '../../../lib/supabase';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -126,11 +126,11 @@ function EscalaCard({
 // ─── ClinicalScales ───────────────────────────────────────────────────────────
 
 export default function ClinicalScales() {
-  const { navigateTo, goBack } = useApp();
+  const { navigateTo, goBack, residents } = useApp();
 
   const [residActual, setResidActual] = useState(0);
   const [valores, setValores] = useState(
-    MOCK_RESIDENTS.map(r => ({
+    residents.map(r => ({
       residenteId: r.id,
       mec: '', gds: '', barthel: '', tug: '',
       condEspeciales: { mec: false, gds: false, barthel: false, tug: false },
@@ -138,7 +138,7 @@ export default function ClinicalScales() {
     }))
   );
 
-  const residente = MOCK_RESIDENTS[residActual];
+  const residente = residents[residActual];
   const v         = valores[residActual];
 
   const setV    = (campo, valor) => setValores(prev => prev.map((e, i) => i === residActual ? { ...e, [campo]: valor } : e));
@@ -151,7 +151,7 @@ export default function ClinicalScales() {
   const ultimoTUG    = histEscalas.tug?.slice(-1)[0]?.valor;
 
   const guardarEscala = async (idx) => {
-    const r   = MOCK_RESIDENTS[idx];
+    const r   = residents[idx];
     const v   = valores[idx];
     const hoy = new Date().toISOString().split('T')[0];
 
@@ -197,7 +197,7 @@ export default function ClinicalScales() {
     goBack();
   };
 
-  const esUltimo = residActual === MOCK_RESIDENTS.length - 1;
+  const esUltimo = residActual === residents.length - 1;
 
   return (
     <div style={{ background: '#1a1a1a', minHeight: '100vh', padding: 16, overflowY: 'auto' }}>
@@ -218,13 +218,13 @@ export default function ClinicalScales() {
             fontSize: 11, padding: '4px 10px', borderRadius: 20,
             background: '#fef3c7', color: '#b45309', fontWeight: 500
           }}>
-            {MOCK_RESIDENTS.length} residentes pendientes
+            {residents.length} residentes pendientes
           </span>
         </div>
 
         {/* ── Tabs de residentes ── */}
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-          {MOCK_RESIDENTS.map((r, i) => (
+          {residents.map((r, i) => (
             <button
               key={r.id}
               onClick={() => setResidActual(i)}

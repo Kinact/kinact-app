@@ -3,7 +3,6 @@ import { jsPDF } from 'jspdf';
 import { useApp } from '../../../context/AppContext';
 import { supabase } from '../../../lib/supabase';
 import { TABLERO_COLORS_DARK } from '../../../constants/tableros';
-import { MOCK_RESIDENTS } from '../../../data/mockData';
 
 const CENTRO_ID = '00000000-0000-0000-0000-000000000001';
 
@@ -424,6 +423,7 @@ function TabFacilitadores() {
 // ─── Pestaña: Familiares ──────────────────────────────────────────────────────
 
 function TabFamiliares() {
+  const { residents } = useApp();
   const [familiares,   setFamiliares]   = useState([]);
   const [cargando,     setCargando]     = useState(true);
   const [formAbierto,  setFormAbierto]  = useState(false);
@@ -432,7 +432,7 @@ function TabFamiliares() {
   const [mostrarPass,  setMostrarPass]  = useState(false);
   const [form, setForm] = useState({
     nombre: '', email: '', password: '',
-    residenteId: MOCK_RESIDENTS[0]?.id || 'r1'
+    residenteId: residents[0]?.id || 'r1'
   });
 
   const cargar = async () => {
@@ -474,7 +474,7 @@ function TabFamiliares() {
     cargar();
   };
 
-  const nombreResidente = (rid) => MOCK_RESIDENTS.find(r => r.id === rid)?.nombre || rid;
+  const nombreResidente = (rid) => residents.find(r => r.id === rid)?.nombre || rid;
 
   return (
     <div>
@@ -505,7 +505,7 @@ function TabFamiliares() {
             {fieldWrap(<>
               <label style={labelStyle()}>Residente vinculado *</label>
               <select style={inputStyle()} value={form.residenteId} onChange={e => set('residenteId', e.target.value)}>
-                {MOCK_RESIDENTS.map(r => <option key={r.id} value={r.id}>{r.nombre}</option>)}
+                {residents.map(r => <option key={r.id} value={r.id}>{r.nombre}</option>)}
               </select>
             </>)}
             {fieldWrap(<div>

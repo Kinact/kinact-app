@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { jsPDF } from 'jspdf';
 import { useApp } from '../../../context/AppContext';
-import { MOCK_RESIDENTS, MOCK_SESSION_HISTORY, MOCK_ESCALAS } from '../../../data/mockData';
+import { MOCK_SESSION_HISTORY, MOCK_ESCALAS } from '../../../data/mockData';
 import { TABLERO_COLORS } from '../../../constants/tableros';
 import { fmtFecha, fmtFechaCorta } from '../../../utils/formatters';
 import { supabase } from '../../../lib/supabase';
@@ -387,7 +387,7 @@ function exportarPDF(residente, historial, escalas, metricas) {
 // ─── ResidentDashboard ────────────────────────────────────────────────────────
 
 export default function ResidentDashboard() {
-  const { navigateTo, goBack, selectedResidentId, userRole } = useApp();
+  const { navigateTo, goBack, selectedResidentId, userRole, residents } = useApp();
   const [escalaAbierta, setEscalaAbierta]   = useState(null);
   const [sesionesReales, setSesionesReales] = useState(null);
   const [escalasReales, setEscalasReales]   = useState(null);
@@ -395,7 +395,7 @@ export default function ResidentDashboard() {
   const [borrando, setBorrando]             = useState(false);
 
   const residenteId = selectedResidentId || 'r1';
-  const residente   = MOCK_RESIDENTS.find(r => r.id === residenteId);
+  const residente   = residents.find(r => r.id === residenteId);
 
   // ── Cargar sesiones y escalas reales de Supabase ───────────────────────────
   useEffect(() => {

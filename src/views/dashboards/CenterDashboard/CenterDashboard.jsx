@@ -1,6 +1,6 @@
 import { useMemo, useEffect, useState } from 'react';
 import { useApp } from '../../../context/AppContext';
-import { MOCK_CENTER, MOCK_RESIDENTS, MOCK_SESSION_HISTORY, MOCK_ESCALAS } from '../../../data/mockData';
+import { MOCK_CENTER, MOCK_SESSION_HISTORY, MOCK_ESCALAS } from '../../../data/mockData';
 import { supabase } from '../../../lib/supabase';
 
 // ─── Constantes ───────────────────────────────────────────────────────────────
@@ -59,7 +59,7 @@ const GRUPO_STYLES = {
 // ─── CenterDashboard ──────────────────────────────────────────────────────────
 
 export default function CenterDashboard() {
-  const { navigateTo } = useApp();
+  const { navigateTo, residents } = useApp();
 
   // ── Datos desde Supabase ───────────────────────────────────────────────────
   const [sesionesDB,  setSesionesDB]  = useState(null); // null = cargando
@@ -108,10 +108,10 @@ export default function CenterDashboard() {
     });
     const maxSesiones = Math.max(...Object.values(sesionesPorResidente), 1);
     const asistenciaMedia = Math.round(
-      MOCK_RESIDENTS.reduce((sum, r) => {
+      residents.reduce((sum, r) => {
         const n = sesionesPorResidente[r.id] || 0;
         return sum + (n / maxSesiones) * 100;
-      }, 0) / MOCK_RESIDENTS.length
+      }, 0) / residents.length
     );
 
     // Escalas: última medición por residente
@@ -161,7 +161,7 @@ export default function CenterDashboard() {
       .sort((a, b) => b.fecha > a.fecha ? 1 : -1)
       .slice(0, 5)
       .map(s => {
-        const res = MOCK_RESIDENTS.find(r =>
+        const res = residents.find(r =>
           (MOCK_SESSION_HISTORY[r.id] || []).some(h => h.sesion === s.sesion && h.fecha === s.fecha)
         );
         return { ...s, residente_id: res?.id };
@@ -169,7 +169,7 @@ export default function CenterDashboard() {
   }, [sesionesDB]);
 
   // ── Alertas clínicas ──────────────────────────────────────────────────────
-  const alertas = useMemo(() => MOCK_RESIDENTS.map(r => {
+  const alertas = useMemo(() => residents.map(r => {
     const hist = sesionesDB
       ? sesionesDB.filter(s => s.residente_id === r.id).slice(-3)
       : (MOCK_SESSION_HISTORY[r.id] || []).slice(-3);
@@ -202,15 +202,15 @@ export default function CenterDashboard() {
     return '#22c55e';
   };
 
-  const verdes   = MOCK_RESIDENTS.filter(r => estadoResidente(r) === '#22c55e').length;
-  const naranjas = MOCK_RESIDENTS.filter(r => estadoResidente(r) === '#f59e0b').length;
-  const rojos    = MOCK_RESIDENTS.filter(r => estadoResidente(r) === '#ef4444').length;
+  const verdes   = residents.filter(r => estadoResidente(r) === '#22c55e').length;
+  const naranjas = residents.filter(r => estadoResidente(r) === '#f59e0b').length;
+  const rojos    = residents.filter(r => estadoResidente(r) === '#ef4444').length;
 
   const verPerfil = (id) => navigateTo('resident', { residentId: id });
 
   const FILA1 = [
     {
-      valor: MOCK_RESIDENTS.length,
+      valor: residents.length,
       label: 'Residentes activos',
       sub: `${verdes} estables · ${naranjas} seguimiento · ${rojos} alerta`,
       color: '#111827'
@@ -359,10 +359,10 @@ export default function CenterDashboard() {
                   listStyle: 'none', padding: '2px 0 8px'
                 }}>
                   <span>Ver todos los residentes</span>
-                  <span style={{ fontSize: 11, color: '#6b7280', fontWeight: 400 }}>{MOCK_RESIDENTS.length} en programa ▾</span>
+                  <span style={{ fontSize: 11, color: '#6b7280', fontWeight: 400 }}>{residents.length} en programa ▾</span>
                 </summary>
 
-                {MOCK_RESIDENTS.map((r, i) => {
+                {residents.map((r, i) => {
                   const hist = sesionesDB
                     ? sesionesDB.filter(s => s.residente_id === r.id)
                     : (MOCK_SESSION_HISTORY[r.id] || []);
@@ -380,7 +380,7 @@ export default function CenterDashboard() {
                       style={{
                         display: 'flex', justifyContent: 'space-between', alignItems: 'center',
                         padding: '5px 0',
-                        borderBottom: i < MOCK_RESIDENTS.length - 1 ? '0.5px solid #f3f4f6' : 'none',
+                        borderBottom: i < residents.length - 1 ? '0.5px solid #f3f4f6' : 'none',
                         cursor: 'pointer'
                       }}
                       onClick={() => verPerfil(r.id)}
@@ -439,7 +439,7 @@ export default function CenterDashboard() {
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                 {ultimasSesiones.slice(0, 5).map((s, i) => {
-                  const res = MOCK_RESIDENTS.find(r => r.id === s.residente_id);
+                  const res = residents.find(r => r.id === s.residente_id);
                   const engColor = s.engagement === 'alto' ? '#15803d' : s.engagement === 'medio' ? '#d97706' : '#dc2626';
                   return (
                     <div key={i} style={{
@@ -509,7 +509,7 @@ export default function CenterDashboard() {
 
                     <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 4 }}>
                       {grupo.residentes.map((rid, i) => {
-                        const r = MOCK_RESIDENTS.find(m => m.id === rid);
+                        const r = residents.find(m => m.id === rid);
                         if (!r) return null;
                         return (
                           <span key={rid} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>

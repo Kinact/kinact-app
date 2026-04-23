@@ -37,6 +37,7 @@ export function AppProvider({ children }) {
   });
 
   const [orgId, setOrgId] = useState(null);
+  const [residents, setResidents] = useState(MOCK_RESIDENTS);
   const [evaluaciones, setEvaluaciones] = useState([]);
   const [selectedResidentId, setSelectedResidentId] = useState('r1');
 
@@ -56,6 +57,28 @@ export function AppProvider({ children }) {
         setSelectedResidentId(data.residente_id);
       }
       setCurrentView(VISTA_POR_ROL[data.rol] || 'center');
+      // Cargar residentes de la organización
+      if (data.org_id) {
+        supabase
+          .from('residentes')
+          .select('*')
+          .eq('org_id', data.org_id)
+          .eq('activo', true)
+          .order('ref_id')
+          .then(({ data: rows }) => {
+            if (rows && rows.length > 0) {
+              setResidents(rows.map(r => ({
+                id:              r.ref_id || r.id,
+                uuid:            r.id,
+                nombre:          r.nombre,
+                iniciales:       r.iniciales || r.nombre.split(' ').map(w => w[0]).join('').slice(0,2).toUpperCase(),
+                tableroHabitual: r.tablero_habitual,
+                incorporacion:   r.incorporacion,
+                sesiones:        r.sesiones || 0,
+              })));
+            }
+          });
+      }
     }
   };
 
@@ -139,7 +162,7 @@ export function AppProvider({ children }) {
     <AppContext.Provider value={{
       user, profile,
       userRole, setUserRole,
-      orgId,
+      orgId, residents, setResidents,
       authLoading,
       currentView, setCurrentView,
       navigateTo, goBack, login, logout,

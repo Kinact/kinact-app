@@ -1,53 +1,11 @@
 import { useState } from 'react';
 import { useApp } from '../../../context/AppContext';
-import { MOCK_RESIDENTS } from '../../../data/mockData';
 
-// ─── Mock data ────────────────────────────────────────────────────────────────
+// ─── Datos de sesiones ────────────────────────────────────────────────────────
 
 // Grupo A: altas prestaciones · Grupo B: mayor soporte
 const GRUPO_A_IDS = ['r1', 'r3', 'r5', 'r7']; // Rosa, Dolores, Concha, Pilar
 const GRUPO_B_IDS = ['r2', 'r4', 'r6', 'r8']; // Paco, Tomás, Emilio, Bernardo
-
-function primerNombre(id) {
-  return MOCK_RESIDENTS.find(r => r.id === id)?.nombre.split(' ')[0] || id;
-}
-
-const SESIONES_PROGRAMADAS = [
-  { id: 'sp1', nombre: 'Grupo A', hora: 'HOY · 11:00h', esHoy: true,
-    jugadores: GRUPO_A_IDS.map(primerNombre),
-    residenteIds: GRUPO_A_IDS,
-    tableros: GRUPO_A_IDS.map(id => MOCK_RESIDENTS.find(r => r.id === id)?.tableroHabitual || 'casa') },
-  { id: 'sp2', nombre: 'Grupo B', hora: 'LUN 27 · 10:30h', esHoy: false,
-    jugadores: GRUPO_B_IDS.map(primerNombre),
-    residenteIds: GRUPO_B_IDS,
-    tableros: GRUPO_B_IDS.map(id => MOCK_RESIDENTS.find(r => r.id === id)?.tableroHabitual || 'casa') },
-  { id: 'sp3', nombre: 'Grupo A', hora: 'MAR 28 · 11:00h', esHoy: false,
-    jugadores: GRUPO_A_IDS.map(primerNombre),
-    residenteIds: GRUPO_A_IDS,
-    tableros: GRUPO_A_IDS.map(id => MOCK_RESIDENTS.find(r => r.id === id)?.tableroHabitual || 'casa') },
-  { id: 'sp4', nombre: 'Grupo B', hora: 'MIÉ 29 · 10:30h', esHoy: false,
-    jugadores: GRUPO_B_IDS.map(primerNombre),
-    residenteIds: GRUPO_B_IDS,
-    tableros: GRUPO_B_IDS.map(id => MOCK_RESIDENTS.find(r => r.id === id)?.tableroHabitual || 'casa') },
-];
-
-const SESIONES_RECIENTES = [
-  { id: 'sr1', nombre: 'Grupo A', fecha: '7 abr', duracion: '25 min',
-    jugadores: GRUPO_A_IDS.map(primerNombre),
-    residenteIds: GRUPO_A_IDS, estado: 'completada' },
-  { id: 'sr2', nombre: 'Grupo B', fecha: '7 abr', duracion: '23 min',
-    jugadores: GRUPO_B_IDS.map(primerNombre),
-    residenteIds: GRUPO_B_IDS, estado: 'completada' },
-  { id: 'sr3', nombre: 'Grupo A', fecha: '31 mar', duracion: '26 min',
-    jugadores: GRUPO_A_IDS.map(primerNombre),
-    residenteIds: GRUPO_A_IDS, estado: 'completada' },
-  { id: 'sr4', nombre: 'Grupo B', fecha: '31 mar', duracion: '22 min',
-    jugadores: GRUPO_B_IDS.map(primerNombre),
-    residenteIds: GRUPO_B_IDS, estado: 'completada' },
-  { id: 'sr5', nombre: 'Grupo A', fecha: '24 mar', duracion: '25 min',
-    jugadores: GRUPO_A_IDS.map(primerNombre),
-    residenteIds: GRUPO_A_IDS, estado: 'completada' },
-];
 
 const TABLEROS = ['casa','barco','flor','cafe'];
 
@@ -55,9 +13,9 @@ const TABLEROS = ['casa','barco','flor','cafe'];
 
 // Para sesiones programadas: busca por nombre exacto; si no encuentra, usa
 // el residente del mismo índice como fallback (datos de demo).
-function resolverJugadores(nombres) {
+function resolverJugadores(nombres, residents) {
   return nombres.map((nombre, i) =>
-    MOCK_RESIDENTS.find(r => r.nombre === nombre) || MOCK_RESIDENTS[i] || null
+    residents.find(r => r.nombre === nombre) || residents[i] || null
   );
 }
 
@@ -68,8 +26,47 @@ function capitalize(str) {
 // ─── Componente ───────────────────────────────────────────────────────────────
 
 export default function SessionSelector({ onIniciarSesion, onVerResidentes }) {
-  const { logout, profile, user } = useApp();
+  const { logout, profile, user, residents } = useApp();
   const nombreFacilitador = profile?.nombre || user?.email?.split('@')[0] || 'Facilitadora';
+
+  const primerNombre = (id) => residents.find(r => r.id === id)?.nombre.split(' ')[0] || id;
+
+  const SESIONES_PROGRAMADAS = [
+    { id: 'sp1', nombre: 'Grupo A', hora: 'HOY · 11:00h', esHoy: true,
+      jugadores: GRUPO_A_IDS.map(primerNombre),
+      residenteIds: GRUPO_A_IDS,
+      tableros: GRUPO_A_IDS.map(id => residents.find(r => r.id === id)?.tableroHabitual || 'casa') },
+    { id: 'sp2', nombre: 'Grupo B', hora: 'LUN 27 · 10:30h', esHoy: false,
+      jugadores: GRUPO_B_IDS.map(primerNombre),
+      residenteIds: GRUPO_B_IDS,
+      tableros: GRUPO_B_IDS.map(id => residents.find(r => r.id === id)?.tableroHabitual || 'casa') },
+    { id: 'sp3', nombre: 'Grupo A', hora: 'MAR 28 · 11:00h', esHoy: false,
+      jugadores: GRUPO_A_IDS.map(primerNombre),
+      residenteIds: GRUPO_A_IDS,
+      tableros: GRUPO_A_IDS.map(id => residents.find(r => r.id === id)?.tableroHabitual || 'casa') },
+    { id: 'sp4', nombre: 'Grupo B', hora: 'MIÉ 29 · 10:30h', esHoy: false,
+      jugadores: GRUPO_B_IDS.map(primerNombre),
+      residenteIds: GRUPO_B_IDS,
+      tableros: GRUPO_B_IDS.map(id => residents.find(r => r.id === id)?.tableroHabitual || 'casa') },
+  ];
+
+  const SESIONES_RECIENTES = [
+    { id: 'sr1', nombre: 'Grupo A', fecha: '7 abr', duracion: '25 min',
+      jugadores: GRUPO_A_IDS.map(primerNombre),
+      residenteIds: GRUPO_A_IDS, estado: 'completada' },
+    { id: 'sr2', nombre: 'Grupo B', fecha: '7 abr', duracion: '23 min',
+      jugadores: GRUPO_B_IDS.map(primerNombre),
+      residenteIds: GRUPO_B_IDS, estado: 'completada' },
+    { id: 'sr3', nombre: 'Grupo A', fecha: '31 mar', duracion: '26 min',
+      jugadores: GRUPO_A_IDS.map(primerNombre),
+      residenteIds: GRUPO_A_IDS, estado: 'completada' },
+    { id: 'sr4', nombre: 'Grupo B', fecha: '31 mar', duracion: '22 min',
+      jugadores: GRUPO_B_IDS.map(primerNombre),
+      residenteIds: GRUPO_B_IDS, estado: 'completada' },
+    { id: 'sr5', nombre: 'Grupo A', fecha: '24 mar', duracion: '25 min',
+      jugadores: GRUPO_A_IDS.map(primerNombre),
+      residenteIds: GRUPO_A_IDS, estado: 'completada' },
+  ];
 
   const [historialExpandido, setHistorialExpandido]     = useState(false);
   const [nuevaPartidaExpandida, setNuevaPartidaExpandida] = useState(true);
@@ -177,7 +174,7 @@ export default function SessionSelector({ onIniciarSesion, onVerResidentes }) {
                         <option value="" style={{ background: '#1e3a8a', color: '#93c5fd' }}>
                           — Seleccionar residente —
                         </option>
-                        {MOCK_RESIDENTS.map(r => (
+                        {residents.map(r => (
                           <option
                             key={r.id} value={r.id}
                             disabled={jugadores.some((id, j) => j !== i && id === r.id)}
@@ -195,7 +192,7 @@ export default function SessionSelector({ onIniciarSesion, onVerResidentes }) {
                       }}>
                         {capitalize(
                           jugadores[i]
-                            ? (MOCK_RESIDENTS.find(r => r.id === jugadores[i])?.tableroHabitual || TABLEROS[i])
+                            ? (residents.find(r => r.id === jugadores[i])?.tableroHabitual || TABLEROS[i])
                             : TABLEROS[i]
                         )}
                       </span>
@@ -206,8 +203,8 @@ export default function SessionSelector({ onIniciarSesion, onVerResidentes }) {
                 <button
                   disabled={empezarDisabled}
                   onClick={() => onIniciarSesion(
-                    jugadores.map(id => MOCK_RESIDENTS.find(r => r.id === id)),
-                    jugadores.map(id => MOCK_RESIDENTS.find(r => r.id === id)?.tableroHabitual || 'casa')
+                    jugadores.map(id => residents.find(r => r.id === id)),
+                    jugadores.map(id => residents.find(r => r.id === id)?.tableroHabitual || 'casa')
                   )}
                   style={{
                     marginTop: 12, width: '100%', padding: '9px 0',
@@ -291,7 +288,7 @@ export default function SessionSelector({ onIniciarSesion, onVerResidentes }) {
               </div>
               <button
                 onClick={() => onIniciarSesion(
-                sesion.residenteIds.map(id => MOCK_RESIDENTS.find(r => r.id === id)).filter(Boolean),
+                sesion.residenteIds.map(id => residents.find(r => r.id === id)).filter(Boolean),
                 sesion.tableros
               )}
                 style={btn('#2563eb', 'white', 'none', true)}

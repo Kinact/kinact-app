@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { useApp } from '../../../context/AppContext';
-import { MOCK_RESIDENTS, POOL_PIEZAS, TABLEROS_CONFIG } from '../../../data/mockData';
+import { POOL_PIEZAS, TABLEROS_CONFIG } from '../../../data/mockData';
 import { TABLERO_COLORS } from '../../../constants/tableros';
 import { formatTime } from '../../../utils/formatters';
 
@@ -386,7 +386,7 @@ function ModalAjustes({ jugadores, onGuardar, onCerrar }) {
 // ─── SessionActive (principal) ────────────────────────────────────────────────
 
 export default function SessionActive() {
-  const { navigateTo, setSessionState, sessionState } = useApp();
+  const { navigateTo, setSessionState, sessionState, residents } = useApp();
 
   const [sesion, setSesion] = useState({
     activa: false,
@@ -399,7 +399,7 @@ export default function SessionActive() {
   const [jugadores, setJugadores] = useState(() => {
     const ctx = sessionState?.jugadores;
     if (ctx?.length > 0 && ctx[0]?.tableroAsignado) return ctx;
-    return MOCK_RESIDENTS.slice(0, 4).map((r, i) => ({
+    return residents.slice(0, 4).map((r, i) => ({
       id: r.id,
       nombre: r.nombre,
       iniciales: r.iniciales,

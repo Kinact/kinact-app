@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef } from 'react';
 import { useApp } from '../../../context/AppContext';
-import { MOCK_RESIDENTS, MOCK_SESSION_HISTORY } from '../../../data/mockData';
+import { MOCK_SESSION_HISTORY } from '../../../data/mockData';
 import { TABLERO_COLORS } from '../../../constants/tableros';
 import { capitalize, fechaHoyLarga } from '../../../utils/formatters';
 import { supabase } from '../../../lib/supabase';
@@ -79,7 +79,7 @@ function barColor(pct) {
 // ─── Summary ─────────────────────────────────────────────────────────────────
 
 export default function Summary() {
-  const { sessionState, evaluaciones, navigateTo } = useApp();
+  const { sessionState, evaluaciones, navigateTo, residents } = useApp();
   const jugadores = sessionState?.jugadores || [];
 
   const [guardando, setGuardando] = useState(true);
@@ -146,7 +146,7 @@ export default function Summary() {
 
   // Observaciones no vacías
   const observacionesFiltradas = (evaluaciones || [])
-    .map((e, i) => e?.observaciones?.trim() ? `${MOCK_RESIDENTS[i]?.nombre}: ${e.observaciones.trim()}` : null)
+    .map((e, i) => e?.observaciones?.trim() ? `${residents[i]?.nombre}: ${e.observaciones.trim()}` : null)
     .filter(Boolean);
 
   const nuevaSesion = () => navigateTo('session-selector');
@@ -221,7 +221,7 @@ export default function Summary() {
             const colores    = TABLERO_COLORS[tableroKey] || TABLERO_COLORS.casa;
             const gapsCompletados = jugador.tablero?.filter(g => g.ocupado).length || 0;
             const pct        = Math.round((gapsCompletados / 9) * 100);
-            const residente  = MOCK_RESIDENTS[index];
+            const residente  = residents[index];
 
             return (
               <div key={jugador.id} style={{

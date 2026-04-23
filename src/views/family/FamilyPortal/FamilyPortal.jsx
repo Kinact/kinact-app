@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useApp } from '../../../context/AppContext';
-import { MOCK_RESIDENTS, MOCK_SESSION_HISTORY, MOCK_ESCALAS } from '../../../data/mockData';
+import { MOCK_SESSION_HISTORY, MOCK_ESCALAS } from '../../../data/mockData';
 import { fmtFechaCorta as fmtCorta, fmtFechaLarga as fmtLarga } from '../../../utils/formatters';
 import { supabase } from '../../../lib/supabase';
 import FamilyMetrics from '../FamilyMetrics/FamilyMetrics';
@@ -44,12 +44,12 @@ function proximoMartes() {
 // ─── FamilyPortal ─────────────────────────────────────────────────────────────
 
 export default function FamilyPortal() {
-  const { selectedResidentId, logout } = useApp();
+  const { selectedResidentId, logout, residents } = useApp();
   const [abierto,     setAbierto]     = useState(false);
   const [vistaActual, setVistaActual] = useState('portal');
 
   const residenteId = selectedResidentId || 'r1';
-  const residente   = MOCK_RESIDENTS.find(r => r.id === residenteId);
+  const residente   = residents.find(r => r.id === residenteId);
 
   // ── Datos desde Supabase ─────────────────────────────────────────────────
   const [historialSesiones, setHistorialSesiones] = useState(null);

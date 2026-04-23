@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { MOCK_RESIDENTS, MOCK_SESSION_HISTORY, MOCK_ESCALAS, TABLEROS_CONFIG } from '../../../data/mockData';
+import { useApp } from '../../../context/AppContext';
+import { MOCK_SESSION_HISTORY, MOCK_ESCALAS, TABLEROS_CONFIG } from '../../../data/mockData';
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
@@ -123,9 +124,9 @@ function Btn({ onClick, bg, color, children, disabled }) {
 // ─── Main component ───────────────────────────────────────────────────────────
 
 export default function ResidentManager({ onBack, onVerDashboard }) {
-  const [residents,     setResidents]     = useState(MOCK_RESIDENTS);
+  const { residents } = useApp();
   const [busqueda,      setBusqueda]      = useState('');
-  const [seleccionado,  setSeleccionado]  = useState(MOCK_RESIDENTS[0].id);
+  const [seleccionado,  setSeleccionado]  = useState(residents[0]?.id || 'r1');
   const [editando,      setEditando]      = useState(false);
   const [nombreEdit,    setNombreEdit]    = useState('');
   const [tableroEdit,   setTableroEdit]   = useState('');
@@ -145,11 +146,6 @@ export default function ResidentManager({ onBack, onVerDashboard }) {
   const tColor        = COLORES_TABLERO[residente?.tableroHabitual] || COLORES_TABLERO.casa;
 
   const guardarEdicion = () => {
-    setResidents(prev => prev.map(r =>
-      r.id === seleccionado
-        ? { ...r, nombre: nombreEdit.trim() || r.nombre, tableroHabitual: tableroEdit }
-        : r
-    ));
     setEditando(false);
   };
 
