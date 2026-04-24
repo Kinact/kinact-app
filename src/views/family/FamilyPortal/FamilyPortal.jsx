@@ -44,7 +44,7 @@ function proximoMartes() {
 // ─── FamilyPortal ─────────────────────────────────────────────────────────────
 
 export default function FamilyPortal() {
-  const { selectedResidentId, logout, residents } = useApp();
+  const { selectedResidentId, logout, residents, orgName } = useApp();
   const [abierto,     setAbierto]     = useState(false);
   const [vistaActual, setVistaActual] = useState('portal');
 
@@ -178,7 +178,7 @@ export default function FamilyPortal() {
           </div>
           <div>
             <div style={{ fontSize: 17, fontWeight: 600, color: '#111827' }}>{residente.nombre}</div>
-            <div style={{ fontSize: 12, color: '#6b7280', marginTop: 2 }}>Residencia Santa Clara · Programa KINACT</div>
+            <div style={{ fontSize: 12, color: '#6b7280', marginTop: 2 }}>{orgName || 'KINACT'} · Programa KINACT</div>
           </div>
         </div>
 

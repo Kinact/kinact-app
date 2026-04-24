@@ -124,7 +124,7 @@ function Btn({ onClick, bg, color, children, disabled }) {
 // ─── Main component ───────────────────────────────────────────────────────────
 
 export default function ResidentManager({ onBack, onVerDashboard }) {
-  const { residents } = useApp();
+  const { residents, orgName } = useApp();
   const [busqueda,      setBusqueda]      = useState('');
   const [seleccionado,  setSeleccionado]  = useState(residents[0]?.id || 'r1');
   const [editando,      setEditando]      = useState(false);
@@ -179,7 +179,7 @@ export default function ResidentManager({ onBack, onVerDashboard }) {
           <div>
             <div style={{ fontSize: 16, fontWeight: 500, color: 'white' }}>Residentes del programa</div>
             <div style={{ fontSize: 11, color: '#6b7280', marginTop: 1 }}>
-              Residencia Santa Clara · {residents.length} residentes activos
+              {orgName || 'KINACT'} · {residents.length} residentes activos
             </div>
           </div>
         </div>

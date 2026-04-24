@@ -28,13 +28,24 @@ export default function Register() {
     setLoading(true);
     setError('');
 
-    // 1. Crear usuario en Supabase Auth
+    // 1. Crear organización
+    const { data: orgData, error: orgError } = await supabase
+      .from('organizaciones')
+      .insert({ nombre: centro.trim(), plan: 'trial', activa: true })
+      .select()
+      .single();
+
+    if (orgError) {
+      setError('Error al crear el centro: ' + orgError.message);
+      setLoading(false);
+      return;
+    }
+
+    // 2. Crear usuario en Supabase Auth
     const { data: authData, error: authError } = await supabase.auth.signUp({
       email: email.trim(),
       password,
-      options: {
-        data: { nombre: nombre.trim(), centro: centro.trim() }
-      }
+      options: { data: { nombre: nombre.trim() } },
     });
 
     if (authError) {
@@ -45,13 +56,14 @@ export default function Register() {
       return;
     }
 
-    // 2. Crear perfil con rol director
+    // 3. Crear perfil con rol director y org_id
     if (authData.user) {
       await supabase.from('profiles').upsert({
-        id: authData.user.id,
-        rol: 'director',
-        nombre: nombre.trim(),
-        centro_nombre: centro.trim(),
+        id:             authData.user.id,
+        rol:            'director',
+        nombre:         nombre.trim(),
+        org_id:         orgData.id,
+        onboarding_done: false,
       }, { onConflict: 'id' });
     }
 

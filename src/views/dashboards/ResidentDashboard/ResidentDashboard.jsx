@@ -131,7 +131,7 @@ const ESCALAS_DEF = [
 
 // ─── PDF Export ───────────────────────────────────────────────────────────────
 
-function exportarPDF(residente, historial, escalas, metricas) {
+function exportarPDF(residente, historial, escalas, metricas, orgName = '') {
   const doc     = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
   const W       = 210;
   const M       = 16;           // margen lateral
@@ -182,7 +182,7 @@ function exportarPDF(residente, historial, escalas, metricas) {
   doc.text('KINACT', M, 13);
   doc.setFontSize(9); doc.setFont('helvetica', 'normal');
   doc.text('Informe individual de residente', M, 20);
-  doc.text('Residencia Santa Clara', M, 26);
+  doc.text(orgName || 'KINACT', M, 26);
   doc.setFontSize(9);
   doc.text(hoy, W - M, 20, { align: 'right' });
 
@@ -376,7 +376,7 @@ function exportarPDF(residente, historial, escalas, metricas) {
     doc.setFontSize(7); doc.setFont('helvetica', 'normal');
     doc.setTextColor(156, 163, 175);
     doc.text(
-      `KINACT · Residencia Santa Clara · ${residente.nombre} · Generado el ${hoy} · Pág. ${p}/${pages}`,
+      `KINACT · ${orgName || 'Centro'} · ${residente.nombre} · Generado el ${hoy} · Pág. ${p}/${pages}`,
       W / 2, 291, { align: 'center' }
     );
   }
@@ -387,7 +387,7 @@ function exportarPDF(residente, historial, escalas, metricas) {
 // ─── ResidentDashboard ────────────────────────────────────────────────────────
 
 export default function ResidentDashboard() {
-  const { navigateTo, goBack, selectedResidentId, userRole, residents } = useApp();
+  const { navigateTo, goBack, selectedResidentId, userRole, residents, orgName } = useApp();
   const [escalaAbierta, setEscalaAbierta]   = useState(null);
   const [sesionesReales, setSesionesReales] = useState(null);
   const [escalasReales, setEscalasReales]   = useState(null);
@@ -540,7 +540,7 @@ export default function ResidentDashboard() {
             </div>
           </div>
           <div style={{ display: 'flex', gap: 8 }}>
-            <button onClick={() => exportarPDF(residente, historial, escalas, METRICAS)} style={btnBase('#fef3c7', '#92400e', '#fcd34d')}>Exportar PDF</button>
+            <button onClick={() => exportarPDF(residente, historial, escalas, METRICAS, orgName)} style={btnBase('#fef3c7', '#92400e', '#fcd34d')}>Exportar PDF</button>
             <button onClick={() => navigateTo('clinical-scales')} style={btnBase('#dbeafe', '#1d4ed8', '#93c5fd')}>Añadir escala clínica</button>
             {userRole === 'director' && (
               <button onClick={() => setModalBorrar(true)} style={btnBase('#fee2e2', '#b91c1c', '#fecaca')}>Borrar datos</button>

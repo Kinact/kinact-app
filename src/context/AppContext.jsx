@@ -37,6 +37,7 @@ export function AppProvider({ children }) {
   });
 
   const [orgId, setOrgId] = useState(null);
+  const [orgName, setOrgName] = useState('');
   const [residents, setResidents] = useState(MOCK_RESIDENTS);
   const [evaluaciones, setEvaluaciones] = useState([]);
   const [selectedResidentId, setSelectedResidentId] = useState('r1');
@@ -61,7 +62,11 @@ export function AppProvider({ children }) {
       } else {
         setCurrentView(VISTA_POR_ROL[data.rol] || 'center');
       }
-      // Cargar residentes de la organización
+      // Cargar nombre y residentes de la organización
+      if (data.org_id) {
+        supabase.from('organizaciones').select('nombre').eq('id', data.org_id).single()
+          .then(({ data: org }) => { if (org) setOrgName(org.nombre); });
+      }
       if (data.org_id) {
         supabase
           .from('residentes')
@@ -126,6 +131,8 @@ export function AppProvider({ children }) {
     setUser(null);
     setProfile(null);
     setUserRole(null);
+    setOrgId(null);
+    setOrgName('');
     setCurrentView('landing');
     setNavigationHistory([]);
     localStorage.removeItem('kinactRole');
@@ -166,7 +173,7 @@ export function AppProvider({ children }) {
     <AppContext.Provider value={{
       user, profile,
       userRole, setUserRole,
-      orgId, residents, setResidents,
+      orgId, orgName, residents, setResidents,
       authLoading,
       currentView, setCurrentView,
       navigateTo, goBack, login, logout,

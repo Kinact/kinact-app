@@ -69,7 +69,7 @@ function CredencialesBox({ email, password }) {
 
 // ─── PDF Export ───────────────────────────────────────────────────────────────
 
-function exportarPDF(residentes) {
+function exportarPDF(residentes, orgName = '') {
   const doc   = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
   const W     = 210;
   const margin = 18;
@@ -85,7 +85,7 @@ function exportarPDF(residentes) {
   doc.setFontSize(18); doc.setFont('helvetica', 'bold');
   doc.text('KINACT', margin, 13);
   doc.setFontSize(9); doc.setFont('helvetica', 'normal');
-  doc.text('Residencia Santa Clara · Informe de Residentes', margin, 20);
+  doc.text(`${orgName || 'Centro'} · Informe de Residentes`, margin, 20);
   doc.text(fechaHoy, W - margin, 20, { align: 'right' });
 
   y = 38;
@@ -173,7 +173,7 @@ function exportarPDF(residentes) {
     doc.setPage(p);
     doc.setFontSize(7); doc.setFont('helvetica', 'normal');
     doc.setTextColor(156, 163, 175);
-    doc.text(`KINACT · Residencia Santa Clara · Generado el ${fechaHoy} · Pág. ${p}/${pages}`, W / 2, 290, { align: 'center' });
+    doc.text(`KINACT · ${orgName || 'Centro'} · Generado el ${fechaHoy} · Pág. ${p}/${pages}`, W / 2, 290, { align: 'center' });
   }
 
   doc.save(`kinact-residentes-${new Date().toISOString().split('T')[0]}.pdf`);
@@ -182,7 +182,7 @@ function exportarPDF(residentes) {
 // ─── Pestaña: Residentes ──────────────────────────────────────────────────────
 
 function TabResidentes() {
-  const { navigateTo, orgId, setResidents } = useApp();
+  const { navigateTo, orgId, orgName, setResidents } = useApp();
   const orgIdEfectivo = orgId || ORG_DEMO_ID;
 
   const [residentes,  setResidentes]  = useState([]);
@@ -268,7 +268,7 @@ function TabResidentes() {
           {cargando ? 'Cargando…' : `${residentes.length} residente${residentes.length !== 1 ? 's' : ''} en programa`}
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
-          <button onClick={() => exportarPDF(residentes)} disabled={cargando || residentes.length === 0} style={btnBase('#fef3c7', '#92400e', '#fcd34d')}>
+          <button onClick={() => exportarPDF(residentes, orgName)} disabled={cargando || residentes.length === 0} style={btnBase('#fef3c7', '#92400e', '#fcd34d')}>
             Exportar PDF
           </button>
           <button onClick={() => setFormAbierto(v => !v)} style={btnBase('#dbeafe', '#1d4ed8', '#93c5fd')}>
@@ -674,7 +674,7 @@ const TABS = [
 ];
 
 export default function UserManagement() {
-  const { navigateTo, goBack } = useApp();
+  const { navigateTo, goBack, orgName } = useApp();
   const [tabActiva, setTabActiva] = useState('residentes');
 
   return (
@@ -689,7 +689,7 @@ export default function UserManagement() {
           <div style={{ width: 1, height: 20, background: '#e5e7eb' }} />
           <div>
             <div style={{ fontSize: 16, fontWeight: 700, color: '#111827' }}>Gestión de usuarios</div>
-            <div style={{ fontSize: 11, color: '#9ca3af' }}>Residencia Santa Clara</div>
+            <div style={{ fontSize: 11, color: '#9ca3af' }}>{orgName || 'KINACT'}</div>
           </div>
         </div>
       </div>

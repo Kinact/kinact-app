@@ -26,7 +26,7 @@ function capitalize(str) {
 // ─── Componente ───────────────────────────────────────────────────────────────
 
 export default function SessionSelector({ onIniciarSesion, onVerResidentes }) {
-  const { logout, profile, user, residents } = useApp();
+  const { logout, profile, user, residents, orgName } = useApp();
   const nombreFacilitador = profile?.nombre || user?.email?.split('@')[0] || 'Facilitadora';
 
   const primerNombre = (id) => residents.find(r => r.id === id)?.nombre.split(' ')[0] || id;
@@ -110,7 +110,7 @@ export default function SessionSelector({ onIniciarSesion, onVerResidentes }) {
             Facilitadora: {nombreFacilitador}
           </div>
           <div style={{ fontSize: 12, color: '#6b7280', marginTop: 3 }}>
-            Residencia Santa Clara · {fechaHoy}
+            {orgName || 'KINACT'} · {fechaHoy}
           </div>
         </div>
         <button onClick={logout} style={btn('#transparent', '#4b5563', '0.5px solid #374151')}>
