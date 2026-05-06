@@ -3,10 +3,10 @@ import { createClient } from '@supabase/supabase-js';
 import { jsPDF } from 'jspdf';
 import { useApp } from '../../../context/AppContext';
 import { supabase } from '../../../lib/supabase';
+import { TABLERO_COLORS_DARK } from '../../../constants/tableros';
 
 const supabaseUrl     = import.meta.env.VITE_SUPABASE_URL;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
-import { TABLERO_COLORS_DARK } from '../../../constants/tableros';
 
 const ORG_DEMO_ID = '00000000-0000-0000-0000-000000000001';
 

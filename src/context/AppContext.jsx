@@ -66,8 +66,7 @@ export function AppProvider({ children }) {
       if (data.org_id) {
         supabase.from('organizaciones').select('nombre').eq('id', data.org_id).single()
           .then(({ data: org }) => { if (org) setOrgName(org.nombre); });
-      }
-      if (data.org_id) {
+
         supabase
           .from('residentes')
           .select('*')
@@ -111,6 +110,7 @@ export function AppProvider({ children }) {
           setProfile(null);
           setUserRole(null);
           setOrgId(null);
+          setOrgName('');
           setCurrentView('landing');
         }
       }
