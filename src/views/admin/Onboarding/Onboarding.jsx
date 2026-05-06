@@ -374,7 +374,7 @@ export default function Onboarding() {
         sesiones:        r.sesiones || 0,
       })));
     }
-    navigateTo('center');
+    navigateTo('game-catalog');
   };
 
   return (

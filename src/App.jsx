@@ -13,6 +13,7 @@ import CenterDashboard from './views/dashboards/CenterDashboard/CenterDashboard'
 import FamilyPortal from './views/family/FamilyPortal/FamilyPortal';
 import ClinicalScales from './views/clinical/ClinicalScales/ClinicalScales';
 import UserManagement from './views/admin/UserManagement/UserManagement';
+import GameCatalog from './views/director/GameCatalog/GameCatalog';
 import './index.css';
 
 // ── Pantalla de carga mientras Supabase verifica la sesión ────────────────────
@@ -82,6 +83,7 @@ function AppRouter() {
     case 'family':            return <FamilyPortal />;
     case 'clinical-scales':   return <ClinicalScales />;
     case 'user-management':   return <UserManagement />;
+    case 'game-catalog':      return <GameCatalog />;
     default:                  return <Landing />;
   }
 }

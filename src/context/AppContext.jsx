@@ -6,7 +6,7 @@ const AppContext = createContext(null);
 
 // Vista inicial por rol
 const VISTA_POR_ROL = {
-  director:    'center',
+  director:    'game-catalog',
   facilitador: 'session-selector',
   familiar:    'family',
   clinico:     'clinical-scales',
