@@ -126,7 +126,7 @@ function EscalaCard({
 // ─── ClinicalScales ───────────────────────────────────────────────────────────
 
 export default function ClinicalScales() {
-  const { navigateTo, goBack, residents } = useApp();
+  const { navigateTo, goBack, residents, orgId } = useApp();
 
   const [residActual, setResidActual] = useState(0);
   const [valores, setValores] = useState(
@@ -181,7 +181,8 @@ export default function ClinicalScales() {
         gds_cond:      v.condEspeciales.gds,
         barthel_cond:  v.condEspeciales.barthel,
         tug_cond:      v.condEspeciales.tug,
-        observaciones: v.observaciones || ''
+        observaciones: v.observaciones || '',
+        org_id:        orgId,
       }, { onConflict: 'residente_id,fecha' });
 
     if (error) console.warn('Error guardando escala:', error.message);

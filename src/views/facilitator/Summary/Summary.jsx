@@ -79,7 +79,7 @@ function barColor(pct) {
 // ─── Summary ─────────────────────────────────────────────────────────────────
 
 export default function Summary() {
-  const { sessionState, evaluaciones, navigateTo, residents } = useApp();
+  const { sessionState, evaluaciones, navigateTo, residents, orgId } = useApp();
   const jugadores = sessionState?.jugadores || [];
 
   const [guardando, setGuardando] = useState(true);
@@ -123,7 +123,8 @@ export default function Summary() {
           autonomia:        ev.autonomia       || 'parcial',
           agitacion:        ev.agitacion       ?? false,
           fatiga:           ev.fatiga          ?? false,
-          observaciones:    ev.observaciones   || ''
+          observaciones:    ev.observaciones   || '',
+          org_id:           orgId,
         });
 
         if (!error) ok++;
